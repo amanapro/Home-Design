@@ -87,11 +87,14 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # The action's default also asks for the old 'tools' package, which Google no longer publishes; ask only for platform-tools.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       # Gradle downloads the Android platform and build tools it needs; only the NDK is installed here.
       - name: Android NDK
-        run: sdkmanager "ndk;${NDK_VERSION}"
+        run: sdkmanager --install "ndk;${NDK_VERSION}" > /dev/null
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -123,6 +126,7 @@ jobs:
       - name: Build APK
         run: |
           export NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION"
+          chmod +x src-tauri/gen/android/gradlew   # uploads from Windows or the GitHub website drop this flag
           npx tauri android build --apk
 
       - uses: actions/upload-artifact@v4
