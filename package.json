@@ -1,0 +1,19 @@
+{
+  "name": "benchmark-planner",
+  "private": true,
+  "version": "0.3.0",
+  "description": "Floor plans, elevations, 3D and takeoff for interior designers, contractors and renovators",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "icons": "tauri icon assets/app-icon.png",
+    "android:init": "tauri android init",
+    "android:dev": "tauri android dev",
+    "android:apk": "tauri android build --apk",
+    "android:apk-debug": "tauri android build --apk --debug"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.1"
+  }
+}

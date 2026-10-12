@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f8faf9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141a1c" media="(prefers-color-scheme: dark)">
+<title>Benchmark Planner</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app">
+  <header class="bar">
+    <div class="brand">Benchmark <small>plan studio · prototype</small></div>
+    <input id="projName" aria-label="Project name" value="Flat 4B — kitchen &amp; bath renovation">
+    <span class="spacer"></span>
+    <div class="seg" role="group" aria-label="View">
+      <button id="vPlan" data-view="plan">Plan</button><button id="vSplit" data-view="split">Plan + 3D</button><button id="vElev" data-view="elev">Elevations</button><button id="v3d" data-view="3d">3D</button>
+    </div>
+    <div class="seg" role="group" aria-label="Units" id="unitSeg">
+      <button data-units="mm">mm</button><button data-units="cm">cm</button><button data-units="m">m</button><button data-units="imperial">ft-in</button>
+    </div>
+    <button class="btn" id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
+    <button class="btn" id="redoBtn" title="Redo (Ctrl+Shift+Z)">Redo</button>
+    <button class="btn" id="fitBtn" title="Zoom to fit (F)">Fit</button>
+    <div class="menuwrap">
+      <button class="btn primary" id="fileBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="fileMenu">File</button>
+      <div class="menu" id="fileMenu" role="menu" hidden>
+        <button role="menuitem" id="newBtn">New project…</button>
+        <button role="menuitem" id="openBtn">Open project…<kbd>Ctrl+O</kbd></button>
+        <button role="menuitem" id="saveBtn">Save project<kbd>Ctrl+S</kbd></button>
+        <button role="menuitem" id="saveAsBtn">Save project as…<kbd>Ctrl+Shift+S</kbd></button>
+        <button role="menuitem" id="autosaveBtn">Autosave every 5 minutes<span id="autosaveState">On</span></button>
+        <hr>
+        <button role="menuitem" id="importBtn">Import from AutoCAD (DXF)…<kbd>Ctrl+I</kbd></button>
+        <button role="menuitem" id="planImgBtn">Import plan image or PDF…</button>
+        <button role="menuitem" id="pdfBtn">Export plan as PDF or image…<kbd>Ctrl+P</kbd></button>
+        <button role="menuitem" id="dxfBtn">Export to AutoCAD (DXF)…<kbd>Ctrl+E</kbd></button>
+        <hr id="refSep" hidden>
+        <button role="menuitem" id="refRemoveBtn" hidden>Remove reference drawing or image</button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tools" id="tools" aria-label="Tools">
+    <div class="railhead"><span class="h">Tools</span>
+      <button class="railbtn" id="railToggle" aria-expanded="true" aria-controls="tools" title="Collapse the tool panel ( [ )" aria-label="Collapse the tool panel"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+    <section class="tsec" data-sec="draw">
+      <button class="sechead" aria-expanded="true" aria-controls="secDraw">Draw<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="toollist" id="secDraw">
+        <button class="titem tool" data-tool="select" id="tSelect" title="Pointer (V)"><span class="ico" data-icon="select"></span><span class="tl">Pointer</span><kbd>V</kbd></button>
+        <button class="titem tool" data-tool="wall" id="tWall" title="Wall (W)"><span class="ico" data-icon="wall"></span><span class="tl">Wall</span><kbd>W</kbd></button>
+        <button class="titem tool" data-tool="arcwall" id="tArc" title="Curved wall (A)"><span class="ico" data-icon="arcwall"></span><span class="tl">Curved wall</span><kbd>A</kbd></button>
+        <button class="titem tool" data-tool="door" id="tDoor" title="Door (D)"><span class="ico" data-icon="door"></span><span class="tl">Door</span><kbd>D</kbd></button>
+        <button class="titem tool" data-tool="door" data-kind="slide" id="tSlide" title="Sliding door, 1 or 2 panels"><span class="ico" data-icon="slidedoor"></span><span class="tl">Sliding door</span></button>
+        <button class="titem tool" data-tool="window" id="tWindow" title="Window (N)"><span class="ico" data-icon="window"></span><span class="tl">Window</span><kbd>N</kbd></button>
+        <button class="titem tool" data-tool="column" id="tColumn" title="Column / pillar (C)"><span class="ico" data-icon="column"></span><span class="tl">Column / pillar</span><kbd>C</kbd></button>
+        <button class="titem tool" data-tool="ruler" id="tRuler" title="Ruler (L)"><span class="ico" data-icon="ruler"></span><span class="tl">Ruler</span><kbd>L</kbd></button>
+        <button class="titem tool" data-tool="area" id="tArea" title="Area (G)"><span class="ico" data-icon="area"></span><span class="tl">Area</span><kbd>G</kbd></button>
+        <button class="titem tool" data-tool="text" id="tText" title="Text (T)"><span class="ico" data-icon="text"></span><span class="tl">Text</span><kbd>T</kbd></button>
+        <button class="titem tool" data-tool="erase" id="tErase" title="Eraser for the imported picture (E)"><span class="ico" data-icon="erase"></span><span class="tl">Eraser</span><kbd>E</kbd></button>
+      </div>
+    </section>
+    <section class="tsec" data-sec="kitchen">
+      <button class="sechead" aria-expanded="true" aria-controls="libKitchen">Kitchen<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="toollist lib" id="libKitchen"></div>
+    </section>
+    <section class="tsec" data-sec="outdoor">
+      <button class="sechead" aria-expanded="true" aria-controls="libOutdoor">Outdoor<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="toollist lib" id="libOutdoor">
+        <p class="libsub">Yard walls</p>
+        <button class="titem tool" data-tool="wall" data-kind="fence" title="Fence: draw like a wall"><span class="ico" data-icon="fence"></span><span class="tl">Fence</span></button>
+        <button class="titem tool" data-tool="wall" data-kind="gwall" title="Garden wall: draw like a wall"><span class="ico" data-icon="gwall"></span><span class="tl">Garden wall</span></button>
+        <button class="titem tool" data-tool="wall" data-kind="hedge" title="Hedge: draw like a wall"><span class="ico" data-icon="hedge"></span><span class="tl">Hedge</span></button>
+        <button class="titem tool" data-tool="wall" data-kind="railing" title="Railing: draw like a wall"><span class="ico" data-icon="railing"></span><span class="tl">Railing</span></button>
+        <p class="libsub">Ground</p>
+        <button class="titem tool" data-tool="area" data-kind="lawn" title="Lawn: click its corners"><span class="ico" data-icon="lawn"></span><span class="tl">Lawn</span></button>
+        <button class="titem tool" data-tool="area" data-kind="paving" title="Patio paving: click its corners"><span class="ico" data-icon="paving"></span><span class="tl">Patio paving</span></button>
+        <button class="titem tool" data-tool="area" data-kind="deck" title="Deck: click its corners"><span class="ico" data-icon="deck"></span><span class="tl">Deck</span></button>
+        <button class="titem tool" data-tool="area" data-kind="gravel" title="Gravel: click its corners"><span class="ico" data-icon="gravel"></span><span class="tl">Gravel</span></button>
+        <button class="titem tool" data-tool="area" data-kind="water" title="Pool or pond: click its corners"><span class="ico" data-icon="water"></span><span class="tl">Pool / water</span></button>
+        <button class="titem tool" data-tool="area" data-kind="bed" title="Planting bed: click its corners"><span class="ico" data-icon="bed"></span><span class="tl">Planting bed</span></button>
+        <p class="libsub">Garden</p>
+        <div id="libOutdoorItems" class="toollist"></div>
+      </div>
+    </section>
+    <section class="tsec" data-sec="bath">
+      <button class="sechead" aria-expanded="true" aria-controls="libBath">Bath<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="toollist lib" id="libBath"></div>
+    </section>
+  </nav>
+
+  <nav class="tabbar" id="tabbar" role="tablist" aria-label="Open projects"></nav>
+  <main class="stage" id="stage" data-view="plan">
+    <section class="pane paneplan" aria-label="Floor plan">
+      <canvas id="plan" tabindex="0" aria-label="Floor plan drawing"></canvas>
+      <span class="panelabel">Plan · Level 1</span>
+      <div class="paneopts planopts">
+        <button class="btn" id="pasteBtn" title="Paste the copied items (Ctrl+V)" hidden>Paste</button>
+        <div class="menuwrap measwrap"><button class="btn togglebtn" id="measBtn" aria-haspopup="true" aria-expanded="false" aria-controls="measMenu" aria-pressed="true" title="Choose which measurements show on the plan">Measures ▾</button>
+          <div class="menu measmenu" id="measMenu" hidden>
+            <p class="mh">Show on the plan</p>
+            <label><input type="checkbox" data-meas="ext"> <span>Outside wall dimensions</span></label>
+            <label><input type="checkbox" data-meas="walls"> <span>Length of every wall</span></label>
+            <label><input type="checkbox" data-meas="openings"> <span>Door and window widths</span></label>
+            <label><input type="checkbox" data-meas="edit"> <span>While drawing, selecting and moving<small>wall lengths, distances of doors, windows and columns</small></span></label>
+            <label><input type="checkbox" data-meas="rooms"> <span>Room areas and sizes</span></label>
+            <label><input type="checkbox" data-meas="areas"> <span>Measured areas<small>off hides plain measurements completely; yard surfaces and room areas keep their colour</small></span></label>
+            <label><input type="checkbox" data-meas="kept"> <span>Kept ruler dimensions</span></label>
+            <div class="rowbtns"><button class="btn" id="measAll">Show all</button><button class="btn" id="measNone">Hide all</button></div>
+          </div></div>
+        <button class="btn togglebtn" id="refToggle" aria-pressed="true" title="Show or hide the imported reference drawing" hidden>Reference</button>
+        <button class="btn togglebtn" id="freeToggle" aria-pressed="false" title="Drag a wall in any direction instead of only in and out (M)">Free move</button>
+        <button class="btn togglebtn" id="snapToggle" aria-pressed="true" title="Snap to wall ends, alignments, angles and a 10 mm grid (S)">Snap</button>
+        <div class="seg" role="group" aria-label="Dragging on empty space"><button id="dragBox" title="Drag on empty space draws a selection box">Box select</button><button id="dragPan" title="Drag on empty space pans the view">Pan</button></div>
+      </div>
+      <div class="scalebar" id="scalebar"><i></i><span></span></div>
+      <div id="lenbox" hidden><label for="lenInput">Length</label><input id="lenInput" autocomplete="off" spellcheck="false"></div>
+      <button class="btn" id="lenBtn" hidden>Type length</button>
+    </section>
+    <section class="pane pane3d" aria-label="3D view">
+      <canvas id="view3d" aria-label="3D model view"></canvas>
+      <span class="panelabel">3D</span>
+      <div class="paneopts"><div class="seg" role="group" aria-label="Wall height in 3D"><button id="cutOff">Full walls</button><button id="cutOn">Cutaway</button></div></div>
+    </section>
+    <section class="pane paneelev" aria-label="Wall elevations">
+      <div class="elevhead">
+        <span class="panelabel">Elevations</span>
+        <label for="elevRoom" class="sr">Room</label><select id="elevRoom"></select>
+        <span class="elevsum" id="elevSum"></span>
+      </div>
+      <div class="elevscroll" id="elevScroll"><canvas id="elev" aria-label="Unfolded wall elevations of the selected room"></canvas></div>
+    </section>
+  </main>
+
+  <aside class="side">
+    <section class="sec" id="inspector" aria-live="polite"></section>
+    <section class="sec">
+      <p class="h">Takeoff</p>
+      <table class="qt" id="qtable"></table>
+      <p class="unitnote" id="qnote"></p>
+      <div class="rowbtns"><button class="btn" id="csvBtn">Copy as CSV</button></div>
+    </section>
+    <section class="sec">
+      <p class="h">Fixture schedule</p>
+      <div class="sched" id="sched"></div>
+    </section>
+  </aside>
+
+  <footer class="status">
+    <span class="hint" id="hint"></span>
+    <span class="snapchip" id="snapchip"></span>
+    <span class="coords" id="coords">x 0 · y 0</span>
+  </footer>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+<div class="modal" id="modal" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <h2 id="modalTitle"></h2>
+    <p id="modalText"></p>
+    <div id="modalBody"></div>
+    <textarea id="modalArea" readonly hidden></textarea>
+    <div class="rowbtns" id="modalBtns"></div>
+  </div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

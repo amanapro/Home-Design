@@ -1,0 +1,16 @@
+{
+  "name": "Benchmark Planner",
+  "short_name": "Benchmark",
+  "description": "Floor plans, wall elevations, 3D and quantity takeoff for kitchen, bath and interior renovation work.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f8faf9",
+  "theme_color": "#263136",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Benchmark Planner",
+  "version": "0.3.0",
+  "identifier": "com.benchmarkplanner.app",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Benchmark Planner",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost",
+      "dangerousDisableAssetCspModification": ["style-src"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Productivity",
+    "shortDescription": "Floor plans, elevations, 3D and takeoff",
+    "longDescription": "Draw precise floor plans, place kitchen and bath fixtures, see wall elevations and a live 3D model, and get floor, wall, tile and skirting quantities per room.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper" }
+    },
+    "android": {
+      "minSdkVersion": 24
+    }
+  }
+}
