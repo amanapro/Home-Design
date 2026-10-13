@@ -159,6 +159,14 @@ Works best with: a clear scan or PDF in which walls are visibly thicker than oth
 - iPhone HEIC photos (export as JPG first)
 - room names (these aren't read from the image; click a room to name it)
 
+### 3D: realistic look and walking inside
+
+- **Walk** (top right of the 3D view), **Walk inside** in a room's side panel, or double-click a floor in 3D puts you inside at eye level (1.6 m). Walk with `W` `A` `S` `D` or the arrow keys (`Q`/`E` or left/right arrows turn, `Shift` goes faster), drag to look around, scroll to step. On phones and tablets use the on-screen joystick and drag to look. Walls, fixtures and furniture stop you; door openings let you through. **Go to room** jumps to any room, and the plan shows where you stand and which way you look. `Esc` or **Orbit** goes back to the outside view.
+- Materials are drawn by the app itself (no picture files, works offline): wood planks, floor tiles, stone, carpet and concrete floors; wall tiles where the room's tiling says (square tiles for full tiling, small brick-bond tiles for a splashback); plaster walls, skirting, ceilings, window frames and glass, door frames, handles, stone worktops, steel and glass; grass, paving, gravel, deck, water, stone garden walls, hedges and fences outside.
+- **Floor in 3D** in a room's side panel picks the floor finish (automatic by room type: wood for living rooms, bedrooms and halls, tiles in kitchens and bathrooms).
+- **Look ▾** → **Light**: *Day* has the sun with soft shadows and a sky; *Night* turns the sun off and the room lights on.
+- **Look ▾** → **Quality**: *Low* (no shadows, simple reflections) for phones, *Medium* for tablets, *High* (sharper textures, soft shadows, surface relief) for computers. *Automatic* picks it from the device.
+
 ### Laser measure (Bosch GLM 400 C)
 
 Draw walls straight from a Bosch laser measure over Bluetooth. Made for the GLM 400 C (sold as GLM 120 C outside the US); the GLM 50 C and GLM 100 C use the same Bluetooth messages.
@@ -195,6 +203,8 @@ The **Outdoor** section in the tool panel has three groups.
 - Any measured area's **Surface** can be changed in its side panel.
 
 **Garden:** Tree, Palm tree, Shrub, Planter, Fountain, Fire pit, Pergola / shade, Umbrella, BBQ grill, Dining set, Sun lounger, Garden bench, Hot tub, Swing set and Garden light.
+
+- Fire pit: choose **Circular** (sized by its radius) or **Rectangular** (length and width) before placing it, or switch later in its side panel. Plan and 3D follow the shape.
 - Place them anywhere; garden items don't snap to walls, except the BBQ and bench, which back onto a wall like kitchen units.
 - `R` rotates, and size and height are set in the side panel.
 - Each has a plan symbol and a 3D model, and is counted in the fixture schedule.
@@ -210,7 +220,7 @@ The **Outdoor** section in the tool panel has three groups.
 - Copy and paste: select a wall (or several), a room, a column, a fixture, a door or window, or a dimension and press `Ctrl+C` (or **Copy** in the side panel). `Ctrl+V` (or **Paste** on the plan) gives a copy that follows the pointer by its top-left corner; click to place it. Copied walls join existing wall ends they meet; a copied door or window is placed on whichever wall you click. **Copy room** takes the room's own stretch of each wall with its doors, windows, fixtures, columns, name and tiling. `Ctrl+D` copies and starts pasting in one step.
 - `L` Ruler: click two points, or drag, to measure length, angle, across and up/down. Snaps to wall corners, fixture corners and wall faces; on a face it measures square from the first point (the true clear distance). `Shift` for any angle. `Enter` or **Keep as dimension** pins it on the plan; kept dimensions are saved with the project, exported to AutoCAD on `A-ANNO-DIMS`, and deleted with the Pointer + `Del`.
 - `A` Curved wall: click the start, click the end (or type the distance and press Enter), then move out to set how far it bends and click, or type a radius and press Enter. It snaps to wall ends and to a half circle; `Shift` bends freely. Select it with the Pointer to drag it, drag an end square (joined walls follow), or drag the round handle to change the bend. The side panel takes an exact radius (the ends stay put), bulge, thickness, height and number of pieces, shows sweep, length along the centre and chord, and has **Flip curve** and **Make straight**. Room areas, wall and skirting quantities, 3D and AutoCAD export follow the curve (it's built from short straight pieces, 6° each by default). In Elevations a curved wall is shown unrolled as one wall. A door or window sits on one piece, so for a wide opening use fewer pieces.
-- Sliding door (Draw section): choose **1 panel** or **2 panels** and a width, then click on a wall. Arrows on the plan show which way the panels slide; elevations show the panels and 3D shows framed glass panels. Select one to change width, flip it to the other side of the wall or make a 1-panel door slide the other way. Any door can be switched between swing, 1-panel and 2-panel sliding with **Type** in its side panel. Sliding doors are counted separately in the fixture schedule and export to AutoCAD on `A-DOOR`.
+- `D` Door: click the Door tool and pick **Swing door**, **Sliding door, 1 panel** or **Sliding door, 2 panels**, then click on a wall. The tool icon shows the type in use, and the side panel lets you switch type and set the width before placing (`D` reuses the last type). Arrows on the plan show which way sliding panels move; elevations show the panels and 3D shows framed glass panels. A placed door can switch type with **Type** in its side panel, and sliding doors flip to the other side of the wall or (1 panel) slide the other way. Sliding doors are counted separately in the fixture schedule and export to AutoCAD on `A-DOOR`.
 - `T` Text: click where the text goes, type, and press `Enter` (`Shift+Enter` for a new line, `Esc` to cancel).
   - Size is the real height of the letters (150 mm to start). Size, angle (with ↻ 90° and Level) and bold are set in the side panel.
   - With the Pointer, drag any text to move it, double-click it to change the words, or press `Delete` to remove it. Copy and paste work too.

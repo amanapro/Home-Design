@@ -54,8 +54,7 @@
         <button class="titem tool" data-tool="select" id="tSelect" title="Pointer (V)"><span class="ico" data-icon="select"></span><span class="tl">Pointer</span><kbd>V</kbd></button>
         <button class="titem tool" data-tool="wall" id="tWall" title="Wall (W)"><span class="ico" data-icon="wall"></span><span class="tl">Wall</span><kbd>W</kbd></button>
         <button class="titem tool" data-tool="arcwall" id="tArc" title="Curved wall (A)"><span class="ico" data-icon="arcwall"></span><span class="tl">Curved wall</span><kbd>A</kbd></button>
-        <button class="titem tool" data-tool="door" id="tDoor" title="Door (D)"><span class="ico" data-icon="door"></span><span class="tl">Door</span><kbd>D</kbd></button>
-        <button class="titem tool" data-tool="door" data-kind="slide" id="tSlide" title="Sliding door, 1 or 2 panels"><span class="ico" data-icon="slidedoor"></span><span class="tl">Sliding door</span></button>
+        <button class="titem tool" data-tool="door" id="tDoor" title="Door (D): swing or sliding" aria-haspopup="menu"><span class="ico" data-icon="door" id="tDoorIco"></span><span class="tl">Door</span><kbd>D</kbd></button>
         <button class="titem tool" data-tool="window" id="tWindow" title="Window (N)"><span class="ico" data-icon="window"></span><span class="tl">Window</span><kbd>N</kbd></button>
         <button class="titem tool" data-tool="column" id="tColumn" title="Column / pillar (C)"><span class="ico" data-icon="column"></span><span class="tl">Column / pillar</span><kbd>C</kbd></button>
         <button class="titem tool" data-tool="ruler" id="tRuler" title="Ruler (L)"><span class="ico" data-icon="ruler"></span><span class="tl">Ruler</span><kbd>L</kbd></button>
@@ -124,7 +123,11 @@
     <section class="pane pane3d" aria-label="3D view">
       <canvas id="view3d" aria-label="3D model view"></canvas>
       <span class="panelabel">3D</span>
-      <div class="paneopts"><div class="seg" role="group" aria-label="Wall height in 3D"><button id="cutOff">Full walls</button><button id="cutOn">Cutaway</button></div></div>
+      <div class="paneopts"><div class="seg" role="group" aria-label="Camera"><button id="walkOff" title="Look at the model from outside">Orbit</button><button id="walkOn" title="Walk inside at eye level (or double-click a floor)">Walk</button></div>
+        <div class="seg" role="group" aria-label="Wall height in 3D" id="cutSeg"><button id="cutOff">Full walls</button><button id="cutOn">Cutaway</button></div>
+        <div class="lookwrap"><button class="btn" id="lookBtn" aria-haspopup="menu" aria-expanded="false" title="Quality and light">Look ▾</button><div class="menu lookmenu" id="lookMenu" role="menu" hidden></div></div></div>
+      <div class="walkhud" id="walkHud" hidden><select id="walkRoom" aria-label="Go to room"></select><span class="walkhelp"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows to walk · drag to look · <kbd>Shift</kbd> faster · <kbd>Esc</kbd> stops</span></div>
+      <div class="walkjoy" id="walkJoy" hidden aria-label="Move"><span class="knob"></span></div>
     </section>
     <section class="pane paneelev" aria-label="Wall elevations">
       <div class="elevhead">
