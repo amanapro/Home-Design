@@ -172,7 +172,7 @@ Works best with: a clear scan or PDF in which walls are visibly thicker than oth
 Draw walls straight from a Bosch laser measure over Bluetooth. Made for the GLM 400 C (sold as GLM 120 C outside the US); the GLM 50 C and GLM 100 C use the same Bluetooth messages.
 
 1. On the laser, turn Bluetooth on in its settings menu. Close the Bosch MeasureOn app if it is connected, since the laser talks to one app at a time.
-2. Click **Laser** at the bottom right. The installed app lists the lasers it finds (it reconnects to the last one by itself next time); Chrome and Edge show their own Bluetooth picker. When it's connected the button turns blue and reads **Read**.
+2. Click **Laser**, the round button at the bottom right of the plan. The installed app lists the lasers it finds (it reconnects to the last one by itself next time); Chrome and Edge show their own Bluetooth picker. When it's connected the button turns blue and reads **Read**.
 3. Click **Read**. The first time, tap the plan at the inside corner where the first wall starts.
 4. In the window, set the wall's angle (0° points right, 90° up; quick buttons for 0, 90, 180 and 270) and which side the room is on, then take one measurement on the laser. The wall is drawn as soon as the reading arrives.
 5. Click **Read** again for the next wall; it continues from the end of the last one and the corner is joined. When a wall ends back at the first corner the room closes, and the next **Read** starts a new run.
