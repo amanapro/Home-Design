@@ -740,6 +740,7 @@ function drawSnapMark(sn){if(!sn)return;const s=toS(sn.p);ctx.strokeStyle=C.snap
   else{ctx.moveTo(s[0]-5,s[1]);ctx.lineTo(s[0]+5,s[1]);ctx.moveTo(s[0],s[1]-5);ctx.lineTo(s[0],s[1]+5);}ctx.stroke();
   (sn.guides||[]).forEach(([a,b])=>{const sa=toS(a),sb=toS(b);ctx.setLineDash([3,4]);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(sa[0],sa[1]);ctx.lineTo(sb[0],sb[1]);ctx.stroke();ctx.setLineDash([]);});}
 function drawToolPreview(){
+  drawLaserMark();
   if(tool==='erase'){drawEraseOverlay();drawEraseCursor();}
   if(tool==='area')drawAreaTool();
   if(tool==='arcwall')drawArcTool();
@@ -1312,6 +1313,7 @@ planCv.addEventListener('pointerdown',e=>{
   if(e.pointerType!=='mouse')updatePreview(p);
   if(e.button===1||e.button===2||(e.button===0&&spaceDown)){pan={sx:sp[0],sy:sp[1],ox:view.ox,oy:view.oy};planCv.setPointerCapture(e.pointerId);return;}
   if(e.button!==0)return;
+  if(laser.picking){laserStartAt(p);return;}
   if(tool==='wall'){const sn=snapPoint(p,draw.start);const q=sn.p;
     if(!draw.start){draw.start=q;draw.chainStart=q;}
     else if(dist(q,draw.start)>5){const a=draw.start;mutate(()=>addWall(a,q));
@@ -1686,6 +1688,7 @@ window.addEventListener('keydown',e=>{
   if(tool==='area'&&areaDraw.pts.length){if(k==='enter'){e.preventDefault();finishArea();return;}if(k==='escape'){areaDraw={pts:[],cur:null,snap:null};renderInspector();dirty();return;}
     if(k==='backspace'){e.preventDefault();areaDraw.pts.pop();renderInspector();dirty();return;}}
   if(k==='escape'&&tool==='ruler'&&ruler){ruler=null;renderInspector();dirty();return;}
+  if(k==='escape'&&laser.picking){laser.picking=false;$('#hint').innerHTML=HINTS[tool]||'';toast('Laser reading cancelled.');return;}
   if(k==='escape'){if(tool==='wall'&&draw.start){draw.start=null;draw.chainStart=null;}else{setTool('select');sel=null;renderInspector();}dirty();return;}
   if(k==='c')setTool('column');else if(k==='v')setTool('select');else if(k==='w')setTool('wall');else if(k==='d')setTool('door');else if(k==='n')setTool('window');else if(k==='l')setTool('ruler');else if(k==='a')setTool('arcwall');else if(k==='g')setTool('area');else if(k==='e'){if((refImage||refDrawing)&&refLeftover)setTool('erase');}else if(k==='t')setTool('text');
   else if(k==='f')fit();
@@ -2270,6 +2273,141 @@ async function openProject(){
     activate(t,true);saveTabsNow();toast('Opened '+(f.path?baseName(f.path):M.name));}
   catch(err){toast('Could not open: '+(err.message||err));}}
 
+
+
+/* ============================== laser measure: Bosch GLM 400 C (GLM 50 C / 100 C / 120 C) over Bluetooth ============================== */
+// The meter talks Bluetooth Low Energy. After connecting we turn on its "sync" mode; from then on every measurement taken
+// on the meter is sent as a 20-byte frame: C0 55 10 <status> ... with the distance in metres as a little-endian float at byte 7.
+// Installed app (Windows, Mac, Linux, Android): the blec plugin. Chrome / Edge web version: Web Bluetooth.
+const GLM={SVC:'02a6c0d0-0451-4000-b000-fb3210111989',CHR:'02a6c0d1-0451-4000-b000-fb3210111989',SYNC:[0xC0,0x55,0x02,0x01,0x00,0x1A],NAME:/GLM|BOSCH|PLR|DLE/i};
+const laser={state:'off',name:'',dev:null,chr:null,raw:'',lastMM:null,lastAt:0,waiter:null,picking:false,scanList:[]};
+let laserChain={tab:null,side:'left',seg:[],start:null};   // seg: [{F,G,d,off,id}] — F,G are the room-side face points
+const BLEC_OK=!!(TAURI&&TAURI.core&&TAURI.core.invoke);
+const WEBBT_OK=!BLEC_OK&&!!(navigator.bluetooth&&navigator.bluetooth.requestDevice);
+const laserSupported=()=>BLEC_OK||WEBBT_OK;
+const hex=d=>Array.from(d).map(b=>b.toString(16).padStart(2,'0')).join(' ');
+function glmParse(bytes){const d=Uint8Array.from(bytes);
+  if(d.length<11||d[0]!==0xC0||d[1]!==0x55||d[2]!==0x10)return null;
+  const v=new DataView(d.buffer).getFloat32(7,true);if(!isFinite(v)||v<0.0005||v>300)return null;return Math.round(v*10000)/10;}
+function onLaserData(bytes){laser.raw=hex(bytes);const r=$('#lzRaw');if(r)r.textContent=laser.raw;
+  const mm=glmParse(bytes);if(mm==null)return;laser.lastMM=mm;laser.lastAt=Date.now();
+  if(laser.waiter){const w=laser.waiter;laser.waiter=null;w(mm);}
+  else toast('Laser: '+fmtLen(mm,true)+'. Press Read first to draw a wall with it.');
+  const lu=$('#lzLast');if(lu){lu.hidden=false;lu.textContent='Use last reading ('+fmtLen(mm,true)+')';}}
+function setLaserState(s,name){laser.state=s;if(name!=null)laser.name=name;renderLaserBtn();dirty();}
+function onLaserLost(){if(laser.state==='off')return;laser.dev=null;laser.chr=null;laser.waiter=null;setLaserState('off');
+  if(!$('#modal').hidden&&$('#lzWait'))closeModal();toast('The laser disconnected. Press Laser to connect again.');}
+function renderLaserBtn(){const b=$('#laserBtn');if(!b)return;b.hidden=!laserSupported();const s=laser.state;b.dataset.state=s;
+  $('#laserLbl').textContent=s==='on'?'Read':s==='connecting'?'Connecting…':'Laser';
+  b.title=s==='on'?'Read a wall length from '+(laser.name||'the laser')+' (Bluetooth connected)':s==='connecting'?'Connecting to the laser…':'Connect a Bosch laser measure by Bluetooth';
+  b.setAttribute('aria-label',b.title);}
+function laserBtnClick(){if(laser.state==='on')laserReadDialog();else if(laser.state==='off')laserConnect();}
+
+// ---- connecting
+async function laserConnect(){
+  if(BLEC_OK)return blecConnect();
+  if(!WEBBT_OK){openModal('Bluetooth isn’t available here','Use the installed app, or Chrome or Edge, to connect a laser measure.',null,[{label:'OK',primary:true,fn:closeModal}]);return;}
+  try{setLaserState('connecting');
+    const dev=await navigator.bluetooth.requestDevice({filters:[{namePrefix:'GLM'},{namePrefix:'Bosch'},{namePrefix:'BOSCH'},{services:[GLM.SVC]}],optionalServices:[GLM.SVC]});
+    dev.addEventListener('gattserverdisconnected',onLaserLost);
+    const srv=await dev.gatt.connect();const svc=await srv.getPrimaryService(GLM.SVC);const chr=await svc.getCharacteristic(GLM.CHR);
+    chr.addEventListener('characteristicvaluechanged',e=>{const v=e.target.value;onLaserData(new Uint8Array(v.buffer,v.byteOffset,v.byteLength));});
+    await chr.startNotifications();
+    const data=new Uint8Array(GLM.SYNC);await(chr.writeValueWithResponse?chr.writeValueWithResponse(data):chr.writeValue(data));
+    laser.dev=dev;laser.chr=chr;setLaserState('on',dev.name||'Laser');toast('Connected to '+laser.name+'. Press Read, then measure.');
+  }catch(e){setLaserState('off');if(e&&e.name==='NotFoundError')return;laserFail(e);}}
+function laserFail(e){const msg=String(e&&e.message||e);
+  openModal('Couldn’t connect to the laser',msg+'\n\nCheck that Bluetooth is on in the laser’s settings menu and on this device, that the laser is switched on, and that the Bosch MeasureOn app isn’t connected to it at the same time.',null,[{label:'OK',primary:true,fn:closeModal}]);}
+// installed app: scan, list the meters found, connect to the one picked (or straight away to the one used last time)
+const binv=(c,a)=>TAURI.core.invoke('plugin:blec|'+c,a||{});
+function bchan(fn){const ch=new TAURI.core.Channel();ch.onmessage=fn;return ch;}
+let lastLaser=null;try{lastLaser=JSON.parse(localStorage.getItem('bm-laser')||'null');}catch(e){}
+async function blecConnect(){
+  try{const ok=await binv('check_permissions',{askIfDenied:true});if(ok===false){laserFail('Bluetooth permission wasn’t given to Benchmark Planner.');return;}}
+  catch(e){laserFail(/not found|unknown|plugin/i.test(String(e))?'This copy of the app was built without Bluetooth. Install the newest build.':e);return;}
+  const body=document.createElement('div');body.className='lzscan';
+  body.innerHTML=`<p class="tip" id="lzScanNote">Looking for laser measures… Switch the laser on and make sure Bluetooth is on in its menu.</p><div class="lzlist" id="lzList"></div>
+    <label class="lzall"><input type="checkbox" id="lzAll"> Show every Bluetooth device</label>`;
+  let done=false;const stop=()=>{if(done)return;done=true;binv('stop_scan').catch(()=>{});};
+  openModal('Connect a laser measure','',null,[{label:'Cancel',fn:()=>{stop();closeModal();}},{label:'Search again',fn:()=>{done=false;scan();}}],body);
+  const list=$('#lzList'),all=$('#lzAll');
+  const render=()=>{const devs=laser.scanList.filter(d=>all.checked||GLM.NAME.test(d.name||''));
+    list.innerHTML=devs.length?devs.map(d=>`<button class="btn lzdev" data-a="${esc(d.address)}"><b>${esc(d.name||'Unnamed device')}</b><span>${esc(d.address)}</span></button>`).join(''):'<p class="tip">Nothing found yet.</p>';
+    list.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{stop();pick(laser.scanList.find(d=>d.address===b.dataset.a));});};
+  all.onchange=render;
+  const pick=async d=>{if(!d)return;closeModal();setLaserState('connecting');
+    try{await binv('connect',{address:d.address,onDisconnect:bchan(()=>onLaserLost()),allowIbeacons:false});
+      await binv('subscribe',{characteristic:GLM.CHR,service:GLM.SVC,onData:bchan(v=>onLaserData(v))});
+      await binv('send',{characteristic:GLM.CHR,data:GLM.SYNC,writeType:'withResponse',service:GLM.SVC});
+      lastLaser={address:d.address,name:d.name};try{localStorage.setItem('bm-laser',JSON.stringify(lastLaser));}catch(e){}
+      setLaserState('on',d.name||'Laser');toast('Connected to '+laser.name+'. Press Read, then measure.');
+    }catch(e){binv('disconnect').catch(()=>{});setLaserState('off');laserFail(e);}};
+  const scan=()=>{laser.scanList=[];render();$('#lzScanNote').textContent='Looking for laser measures… Switch the laser on and make sure Bluetooth is on in its menu.';
+    binv('scan',{timeout:12000,onDevices:bchan(devs=>{if(done)return;laser.scanList=devs||[];render();
+      const again=lastLaser&&laser.scanList.find(d=>d.address===lastLaser.address);if(again){stop();pick(again);}}),allowIbeacons:false})
+      .then(()=>{if(!done&&$('#lzScanNote'))$('#lzScanNote').textContent=laser.scanList.length?'Search finished. Pick your laser.':'No laser found. Check that it is on, then Search again.';})
+      .catch(e=>{stop();closeModal();laserFail(e);});};
+  scan();}
+async function laserDisconnect(){laser.waiter=null;const was=laser.state;laser.state='off';
+  try{if(BLEC_OK)await binv('disconnect');else if(laser.dev&&laser.dev.gatt.connected)laser.dev.gatt.disconnect();}catch(e){}
+  laser.dev=null;laser.chr=null;if(was!=='off')toast('Laser disconnected.');renderLaserBtn();dirty();}
+
+// ---- reading a wall
+function laserChainOk(){const c=laserChain;if(!activeTab||c.tab!==activeTab.id){laserChain={tab:activeTab&&activeTab.id,side:c.side,seg:[],start:null};return;}
+  while(c.seg.length&&!wallById(c.seg[c.seg.length-1].id))c.seg.pop();}
+const laserNext=()=>{const c=laserChain;return c.seg.length?c.seg[c.seg.length-1].G:c.start;};
+function laserPickStart(){closeModal();laser.waiter=null;laser.picking=true;$('#hint').innerHTML='<b>Laser:</b> tap the inside corner where the first wall starts. <kbd>Esc</kbd> cancels.';
+  toast('Tap the plan at the inside corner where the wall starts.');planCv.style.cursor='crosshair';dirty();}
+function laserStartAt(p){laser.picking=false;$('#hint').innerHTML=HINTS[tool]||'';laserChain={tab:activeTab.id,side:laserChain.side,seg:[],start:snapPoint(p,null).p};laserReadDialog();}
+function laserReadDialog(){laserChainOk();const from=laserNext();if(!from){laserPickStart();return;}
+  const body=document.createElement('div');body.className='lzread';const t=curWallSpec().t;
+  const recent=laser.lastMM&&Date.now()-laser.lastAt<120000;
+  body.innerHTML=`<div class="lzwait" id="lzWait"><span class="lzdot"></span><span id="lzMsg">Waiting for a measurement from ${esc(laser.name||'the laser')}…</span></div>
+    <div class="kv">
+      <label for="lzAng">Angle</label><div class="lzang"><input id="lzAng" inputmode="decimal" value="0" aria-describedby="lzAngTip"><span class="unit">°</span>
+        <div class="seg segsm" role="group" aria-label="Quick angles">${[[0,'→ 0'],[90,'↑ 90'],[180,'← 180'],[270,'↓ 270']].map(([v,l])=>`<button type="button" data-ang="${v}" aria-pressed="${v===0}">${l}</button>`).join('')}</div></div>
+      <label>Room side</label><div class="seg segsm" role="group" aria-label="Room side">${['left','right'].map(s=>`<button type="button" data-side="${s}" aria-pressed="${laserChain.side===s}">Room on the ${s}</button>`).join('')}</div>
+      <label for="lzLen">Or type</label><div class="lzang"><input id="lzLen" inputmode="decimal" placeholder="length" autocomplete="off"><button type="button" class="btn" id="lzDraw">Draw</button></div>
+    </div>
+    <p class="tip" id="lzAngTip">0° points right, 90° up. The reading is the room-side face of the wall; the ${fmtLen(t,true)} wall thickness goes on the other side.
+      ${laserChain.seg.length?'This wall continues from the end of the last one.':'This is the first wall of a new run.'} <a href="#" id="lzNew">Start somewhere else</a></p>
+    <button type="button" class="btn" id="lzLast"${recent?'':' hidden'}>${recent?'Use last reading ('+fmtLen(laser.lastMM,true)+')':''}</button>
+    <details class="lzdbg"><summary>Data from the laser</summary><code id="lzRaw">${esc(laser.raw||'nothing yet')}</code></details>`;
+  const cancel=()=>{laser.waiter=null;closeModal();};
+  openModal('Read wall length','Take one measurement on the laser. The wall is drawn as soon as it arrives.',null,
+    [{label:'Disconnect',fn:()=>{closeModal();laserDisconnect();}},{label:'Cancel',primary:true,fn:cancel}],body);
+  const ang=$('#lzAng'),btns=body.querySelectorAll('[data-ang]');
+  const syncAng=()=>btns.forEach(b=>b.setAttribute('aria-pressed',String(parseFloat(ang.value)===+b.dataset.ang)));
+  btns.forEach(b=>b.onclick=()=>{ang.value=b.dataset.ang;syncAng();});ang.oninput=syncAng;
+  body.querySelectorAll('[data-side]').forEach(b=>b.onclick=()=>{laserChain.side=b.dataset.side;body.querySelectorAll('[data-side]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});
+  const go=mm=>{const a=parseFloat(String(ang.value).replace(',','.'));if(!isFinite(a)){lenIn.value=String(mm);ang.focus();toast('Type an angle in degrees, e.g. 90, then press Draw.');laser.waiter=go;return;}
+    laser.waiter=null;closeModal();laserAddWall(mm,a);};
+  const lenIn=$('#lzLen');laser.waiter=go;
+  $('#lzLast').onclick=()=>{if(laser.lastMM)go(laser.lastMM);};
+  $('#lzDraw').onclick=()=>{const L=parseLen(lenIn.value);if(L>0)go(L);else{lenIn.focus();toast('Type a length, e.g. 3600.');}};
+  lenIn.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter')$('#lzDraw').click();};ang.onkeydown=e=>e.stopPropagation();
+  $('#lzNew').onclick=e=>{e.preventDefault();laserPickStart();};}
+const lzCross=(a,b)=>a[0]*b[1]-a[1]*b[0];
+function laserAddWall(L,deg){laserChainOk();const c=laserChain,F=laserNext();if(!F)return;
+  const r=-deg*Math.PI/180;let d=[Math.cos(r),Math.sin(r)];d=d.map(v=>Math.abs(v)<1e-9?0:v);
+  const t=curWallSpec().t,n=c.side==='left'?[-d[1],d[0]]:[d[1],-d[0]];const off=mul(n,t/2);   // toward the wall, away from the room (y points down)
+  const G=add(F,mul(d,L));let a=add(F,off),b=add(G,off);
+  const prev=c.seg[c.seg.length-1],first=c.seg[0];let joinPrev=null,closed=false;
+  const meet=(p1,d1,p2,d2)=>{const den=lzCross(d1,d2);if(Math.abs(den)<1e-6)return null;const s=lzCross(sub(p2,p1),d2)/den;return add(p1,mul(d1,s));};
+  if(prev){const X=meet(add(prev.F,prev.off),prev.d,a,d);if(X)joinPrev=a=X;else if(dot(prev.d,d)>0)joinPrev=a;}
+  if(first&&c.seg.length>=2&&dist(G,first.F)<Math.max(150,L*0.03)){const X=meet(a,d,add(first.F,first.off),first.d);if(X){b=X;closed=true;}}
+  let id=null;
+  mutate(()=>{if(prev&&joinPrev){const pw=wallById(prev.id);if(pw)pw.b=joinPrev.slice();}
+    if(closed){const fw=wallById(first.id);if(fw)fw.a=b.slice();}
+    addWall(a,b);id=M.walls[M.walls.length-1].id;clampOpenings();});
+  c.seg.push({F,G,d,off,id});
+  if(closed){laserChain={tab:c.tab,side:c.side,seg:[],start:null};toast('Wall '+fmtLen(L,true)+' drawn — the room is closed. Press Read to start a new run.');}
+  else toast('Wall '+fmtLen(L,true)+' at '+(Math.round(deg*10)/10)+'° drawn. Press Read for the next wall.');
+  sel={kind:'wall',id};renderInspector();dirty();}
+function drawLaserMark(){if(laser.state!=='on'||!activeTab||laserChain.tab!==activeTab.id)return;const p=laserNext();if(!p)return;
+  const s=toS(p),col=C.accent||'#1f6feb';ctx.save();ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.arc(s[0],s[1],7,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(s[0],s[1],2.5,0,Math.PI*2);ctx.fill();
+  ctx.font='600 11px '+getComputedStyle(document.body).fontFamily;ctx.fillText('next',s[0]+10,s[1]-8);ctx.restore();}
 
 /* ============================== tabs: several projects open at once, and autosave ============================== */
 // Each tab keeps its own drawing, undo history, reference, file and view. The active tab's state lives in the usual
@@ -3218,6 +3356,7 @@ if(!loadTabs())migrateOld();
 M=activeTab.M;readColors();
 setSnap(snapOn);setFree(freeMove,true);setEmptyDrag(emptyDrag);setView('plan');setCut(true);
 activate(activeTab,true);syncAutosaveUI();
+$('#laserBtn').onclick=laserBtnClick;renderLaserBtn();
 requestAnimationFrame(()=>{fit();frame3d();build3d();loop();});
 if(!three.ok){$('.pane3d .panelabel').textContent='3D unavailable: the 3D library did not load';}
 

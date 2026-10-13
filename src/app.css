@@ -182,6 +182,24 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 
 .status{grid-area:status;display:flex;gap:16px;align-items:center;padding:5px 14px;border-top:1px solid var(--line);background:var(--panel);font-size:12px;color:var(--muted);min-width:0}
 .status .hint{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.laserbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--paper);color:var(--muted);border-radius:6px;padding:4px 11px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.laserbtn:hover{color:var(--ink)}
+.laserbtn[data-state="connecting"]{opacity:.7;cursor:progress}
+.laserbtn[data-state="on"]{background:var(--accent);border-color:var(--accent);color:#fff}
+:root[data-theme="dark"] .laserbtn[data-state="on"]{color:#0e1213}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .laserbtn[data-state="on"]{color:#0e1213}}
+.lzwait{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:0 0 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font-weight:600}
+.lzdot{width:10px;height:10px;border-radius:50%;background:var(--accent);flex:none;animation:lzpulse 1.2s ease-in-out infinite}
+@keyframes lzpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+@media (prefers-reduced-motion: reduce){.lzdot{animation:none}}
+.lzread .kv{grid-template-columns:84px minmax(0,1fr)}.lzread .kv .seg{justify-self:start}
+.lzang{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.lzang input{width:90px!important;flex:none}.lzang .unit{color:var(--muted)}
+.lzread .tip,.lzscan .tip{font-size:12px;color:var(--muted);margin:10px 0 0;line-height:1.45}
+#lzLast{margin-top:10px}
+.lzdbg{margin-top:10px;font-size:12px;color:var(--muted)}.lzdbg code{display:block;margin-top:4px;font-family:var(--f-mono);font-size:11.5px;word-break:break-all;color:var(--ink)}
+.lzlist{display:flex;flex-direction:column;gap:6px;margin:10px 0;max-height:40vh;overflow:auto}
+.lzdev{display:flex;justify-content:space-between;gap:12px;text-align:left;border:1px solid var(--line);padding:8px 10px}.lzdev span{font-family:var(--f-mono);font-size:11.5px;color:var(--muted)}
+.lzall{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
 .status .coords{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 .snapchip{font-family:var(--f-mono);font-size:11px;color:var(--snap);min-width:64px}
 

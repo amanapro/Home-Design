@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
+    <!-- Bluetooth is only for the laser measure; the app still installs on devices without it -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" tools:replace="android:required" />
 
     <application
         android:icon="@mipmap/ic_launcher"

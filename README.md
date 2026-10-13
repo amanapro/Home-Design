@@ -159,6 +159,23 @@ Works best with: a clear scan or PDF in which walls are visibly thicker than oth
 - iPhone HEIC photos (export as JPG first)
 - room names (these aren't read from the image; click a room to name it)
 
+### Laser measure (Bosch GLM 400 C)
+
+Draw walls straight from a Bosch laser measure over Bluetooth. Made for the GLM 400 C (sold as GLM 120 C outside the US); the GLM 50 C and GLM 100 C use the same Bluetooth messages.
+
+1. On the laser, turn Bluetooth on in its settings menu. Close the Bosch MeasureOn app if it is connected, since the laser talks to one app at a time.
+2. Click **Laser** at the bottom right. The installed app lists the lasers it finds (it reconnects to the last one by itself next time); Chrome and Edge show their own Bluetooth picker. When it's connected the button turns blue and reads **Read**.
+3. Click **Read**. The first time, tap the plan at the inside corner where the first wall starts.
+4. In the window, set the wall's angle (0° points right, 90° up; quick buttons for 0, 90, 180 and 270) and which side the room is on, then take one measurement on the laser. The wall is drawn as soon as the reading arrives.
+5. Click **Read** again for the next wall; it continues from the end of the last one and the corner is joined. When a wall ends back at the first corner the room closes, and the next **Read** starts a new run.
+
+- The reading is the room-side face of the wall (measure inside the room, corner to corner); the wall thickness from the Wall tool goes on the outside. Walking around a room in order (0, 90, 180, 270 with the room on the left) gives a closed room with exactly the measured inside sizes.
+- A reading taken while the window is closed isn't lost: the next Read window offers **Use last reading**. You can also type a length there.
+- **Start somewhere else** begins a new run at a point you tap. Undo removes laser walls as usual, and the next Read continues from the last wall that is still there.
+- **Data from the laser** in the Read window shows the raw bytes of the last message, which helps if a different Bosch model sends something unexpected.
+- Android asks for the Bluetooth (Nearby devices) permission the first time. The Android app now needs Android 8.0 or newer.
+- Not available in Firefox or Safari, which have no Bluetooth for web pages.
+
 ### Outdoor (backyard)
 
 The **Outdoor** section in the tool panel has three groups.
