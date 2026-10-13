@@ -17,9 +17,10 @@
     <div class="brand">Benchmark <small>plan studio · prototype</small></div>
     <input id="projName" aria-label="Project name" value="Flat 4B — kitchen &amp; bath renovation">
     <span class="spacer"></span>
+    <div class="viewrow"><button class="laserbtn" id="laserBtn" type="button" data-state="off" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 9a14.5 14.5 0 0 1 20 0"/><path d="M5.2 12.6a10 10 0 0 1 13.6 0"/><path d="M8.6 16.1a5 5 0 0 1 6.8 0"/><circle cx="12" cy="19.6" r="1.3" fill="currentColor" stroke="none"/></svg><span id="laserLbl">Laser</span></button>
     <div class="seg" role="group" aria-label="View">
       <button id="vPlan" data-view="plan">Plan</button><button id="vSplit" data-view="split">Plan + 3D</button><button id="vElev" data-view="elev">Elevations</button><button id="v3d" data-view="3d">3D</button>
-    </div>
+    </div></div>
     <div class="seg" role="group" aria-label="Units" id="unitSeg">
       <button data-units="mm">mm</button><button data-units="cm">cm</button><button data-units="m">m</button><button data-units="imperial">ft-in</button>
     </div>
@@ -120,7 +121,6 @@
       <div id="lenbox" hidden><label for="lenInput">Length</label><input id="lenInput" autocomplete="off" spellcheck="false"></div>
       <button class="btn" id="lenBtn" hidden>Type length</button>
       <button class="detailsbtn" id="detailsBtn" type="button" aria-controls="side" aria-expanded="false"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg><span>Details</span></button>
-      <button class="laserbtn" id="laserBtn" type="button" data-state="off" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 9a14.5 14.5 0 0 1 20 0"/><path d="M5.2 12.6a10 10 0 0 1 13.6 0"/><path d="M8.6 16.1a5 5 0 0 1 6.8 0"/><circle cx="12" cy="19.6" r="1.3" fill="currentColor" stroke="none"/></svg><span id="laserLbl">Laser</span></button>
     </section>
     <section class="pane pane3d" aria-label="3D view">
       <canvas id="view3d" aria-label="3D model view"></canvas>
