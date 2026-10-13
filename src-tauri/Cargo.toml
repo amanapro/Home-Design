@@ -26,3 +26,8 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# Local copy of the Bluetooth plugin with one fix: subscribe uses indications when a characteristic offers them
+# (Bosch laser measures reject plain notifications). See vendor/tauri-plugin-blec/android/.../Peripheral.kt.
+[patch.crates-io]
+tauri-plugin-blec = { path = "vendor/tauri-plugin-blec" }
