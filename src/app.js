@@ -1753,7 +1753,22 @@ function updateCoords(){$('#coords').textContent='x '+fmtLen(cursor[0])+' · y '
 /* ============================== inspector & takeoff ============================== */
 function field(label,id,val,type='len'){return `<label for="${id}">${label}</label><input id="${id}" data-type="${type}" value="${val}">`;}
 function selectField(label,id,opts,val){return `<label for="${id}">${label}</label><select id="${id}">${Object.entries(opts).map(([k,v])=>`<option value="${k}"${k==val?' selected':''}>${v}</option>`).join('')}</select>`;}
-function renderInspector(){
+const isNarrow=()=>matchMedia('(max-width:900px)').matches;let sheetSel=null;
+function setSheet(open){const app=$('#app');app.classList.toggle('sheet',open);const b=$('#detailsBtn');if(b)b.setAttribute('aria-expanded',String(open));if(open)$('#side').scrollTop=0;}
+function selPoint(){if(!sel)return null;const k=sel.kind;
+  if(k==='item'){const i=M.items.find(x=>x.id===sel.id);return i&&[i.x,i.y];}
+  if(k==='wall'){const w=wallById(sel.id);return w&&mul(add(w.a,w.b),.5);}
+  if(k==='opening'){const o=M.openings.find(x=>x.id===sel.id),w=o&&wallById(o.wall);return w&&add(w.a,mul(wallDir(w),o.s));}
+  if(k==='col'){const c=(M.cols||[]).find(x=>x.id===sel.id);return c&&[c.x,c.y];}
+  if(k==='room'){const r=selRoom();return r&&r.centroid;}
+  if(k==='text'){const t=(M.texts||[]).find(x=>x.id===sel.id);return t&&[t.x,t.y];}
+  if(k==='area'){const A=(M.areas||[]).find(x=>x.id===sel.id);return A&&A.pts.length&&mul(A.pts.reduce((a,p)=>add(a,p),[0,0]),1/A.pts.length);}
+  return null;}
+// keep what you picked in view above the details sheet
+function sheetReveal(){const p=selPoint();if(!p)return;const pr=planCv.getBoundingClientRect(),sr=$('#side').getBoundingClientRect();const bottom=Math.min(pr.bottom,sr.top)-pr.top-30,top=60;
+  const sp=toS(p);if(sp[1]>top&&sp[1]<bottom)return;view.oy+=((top+bottom)/2)-sp[1];dirty();}
+function sheetFollowSel(){if(!isNarrow())return;const k=sel?JSON.stringify(sel):null;if(k===sheetSel)return;sheetSel=k;setSheet(!!k);if(k)setTimeout(sheetReveal,240);}
+function renderInspector(){setTimeout(sheetFollowSel,0);
   const el=$('#inspector');let h='';
   if(!sel){
     if(tool==='ruler'){el.innerHTML=rulerPanel();bindRuler();return;}
@@ -3598,6 +3613,7 @@ setSnap(snapOn);setFree(freeMove,true);setEmptyDrag(emptyDrag);setView('plan');s
 activate(activeTab,true);syncAutosaveUI();
 if(three.ok){applyLook();syncWalkUI();}
 $('#laserBtn').onclick=laserBtnClick;renderLaserBtn();
+$('#detailsBtn').onclick=()=>setSheet(!$('#app').classList.contains('sheet'));$('#sheetClose').onclick=()=>setSheet(false);$('#sheetGrip').onclick=()=>setSheet(false);
 requestAnimationFrame(()=>{fit();frame3d();build3d();loop();});
 if(!three.ok){$('.pane3d .panelabel').textContent='3D unavailable: the 3D library did not load';}
 

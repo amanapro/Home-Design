@@ -321,4 +321,16 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
   .status{flex-wrap:wrap;gap:4px 12px}
   .status .hint{white-space:normal;flex-basis:100%}
 }
+.sheethead,.detailsbtn{display:none}
+@media (max-width:900px){
+  .side{position:fixed;left:0;right:0;bottom:0;max-height:46vh;z-index:40;border-top:1px solid var(--line);border-radius:16px 16px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.25);transform:translateY(105%);transition:transform .22s ease;overscroll-behavior:contain;padding-bottom:env(safe-area-inset-bottom)}
+  #app.sheet .side{transform:none}
+  .sheethead{display:flex;align-items:center;justify-content:center;position:sticky;top:0;z-index:2;background:var(--panel);padding:6px 10px 2px;min-height:34px}
+  .sheetgrip{border:0;background:transparent;padding:8px 40px;cursor:pointer}.sheetgrip span{display:block;width:44px;height:5px;border-radius:3px;background:var(--line)}
+  .sheetx{position:absolute;right:10px;top:6px}
+  .detailsbtn{position:absolute;left:10px;bottom:10px;z-index:6;display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:22px;padding:8px 16px;font:inherit;font-size:13.5px;font-weight:600;min-height:40px;box-shadow:0 3px 12px rgba(0,0,0,.16);cursor:pointer}
+  .detailsbtn[aria-expanded="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+  .scalebar{bottom:60px}
+  .stage{height:calc(100vh - 210px);height:calc(100dvh - 210px)}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
