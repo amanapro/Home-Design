@@ -2377,7 +2377,21 @@ const binv=(c,a)=>TAURI.core.invoke('plugin:blec|'+c,a||{});
 function bchan(fn){const ch=new TAURI.core.Channel();ch.onmessage=fn;return ch;}
 let lastLaser=null;try{lastLaser=JSON.parse(localStorage.getItem('bm-laser')||'null');}catch(e){}
 // does this look like a Bosch laser? by name, by Bosch's Bluetooth company id (0x02A6) or by the measuring service
-const isLaserDev=d=>GLM.NAME.test(d.name||'')||Object.keys(d.manufacturerData||{}).some(k=>+k===0x02A6)||(d.services||[]).some(u=>String(u).toLowerCase()===GLM.SVC);
+// which characteristic carries the measurements: the classic Bosch one, the newer Bosch one, or any notify+write pair in a vendor service
+const GLM_ALT={SVC:'00005301-0000-0041-5253-534f46540000',CHR:'00004301-0000-0041-5253-534f46540000'};
+const STD_UUID=/-0000-1000-8000-00805f9b34fb$/i;
+function laserTarget(svcs){const L=u=>String(u||'').toLowerCase();const all=[];(svcs||[]).forEach(S=>(S.characteristics||[]).forEach(c=>all.push({svc:L(S.uuid),chr:L(c.uuid),p:+c.properties||0})));
+  const wt=c=>c&&!(c.p&8)&&(c.p&4)?'withoutResponse':'withResponse';
+  for(const K of [GLM,GLM_ALT]){const c=all.find(x=>x.chr===K.CHR);if(c)return {svc:c.svc,chr:c.chr,wt:wt(c)};}
+  const c=all.find(x=>!STD_UUID.test(x.svc)&&(x.p&48)&&(x.p&12));if(c)return {svc:c.svc,chr:c.chr,wt:wt(c)};
+  return {svc:GLM.SVC,chr:GLM.CHR,wt:'withResponse'};}
+const charFlags=p=>[[2,'read'],[4,'write-no-reply'],[8,'write'],[16,'notify'],[32,'indicate']].filter(([b])=>p&b).map(([,n])=>n).join(', ');
+function laserDiag(d,svcs,step,e){const lines=['Device: '+(d.name||'?')+' ('+d.address+')','Failed at: '+step,'Error: '+String(e&&e.message||e),'Services:'];
+  (svcs||[]).forEach(S=>{lines.push('  '+S.uuid);(S.characteristics||[]).forEach(c=>lines.push('    '+c.uuid+'  ['+charFlags(+c.properties||0)+']'));});if(!svcs)lines.push('  (could not read them)');
+  const txt=lines.join('\n');
+  openModal('Couldn’t connect to the laser','The laser was found but the connection didn’t finish. Check that the Bosch app is closed and Bluetooth is on in the laser’s menu, then try again. If it keeps failing, copy this and send it to whoever set up the app — it shows exactly what the laser offers.',txt,
+    [{label:'Copy',fn:b=>copyText(txt,b)},{label:'Try again',fn:()=>{closeModal();laserConnect();}},{label:'Close',primary:true,fn:closeModal}]);}
+const isLaserDev=d=>GLM.NAME.test(d.name||'')||Object.keys(d.manufacturerData||{}).some(k=>+k===0x02A6)||(d.services||[]).some(u=>[GLM.SVC,GLM_ALT.SVC].includes(String(u).toLowerCase()));
 async function blecConnect(){
   try{const ok=await binv('check_permissions',{askIfDenied:true});if(ok===false){laserFail('Bluetooth permission (“Nearby devices”) wasn’t given to Benchmark Planner. Allow it in the phone’s Settings → Apps → Benchmark Planner → Permissions.');return;}}
   catch(e){laserFail(/not found|unknown|plugin/i.test(String(e))?'This copy of the app was built without Bluetooth. Install the newest build.':e);return;}
@@ -2394,14 +2408,15 @@ async function blecConnect(){
     list.innerHTML=devs.length?devs.map(d=>{const nm=d.name&&d.name!==d.address?d.name:'Unnamed device';return `<button class="btn lzdev${isLaserDev(d)?' lzhit':''}" data-a="${esc(d.address)}"><b>${esc(nm)}</b><span>${esc(sig(d.rssi))} · ${esc(d.address)}</span></button>`;}).join(''):'<p class="tip">Nothing found yet.</p>';
     list.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{stop();pick(laser.scanList.find(d=>d.address===b.dataset.a));});};
   all.onchange=render;
-  const pick=async d=>{if(!d)return;closeModal();setLaserState('connecting');
+  const pick=async d=>{if(!d)return;closeModal();setLaserState('connecting');let svcs=null,step='connect';
     try{await binv('connect',{address:d.address,onDisconnect:bchan(()=>onLaserLost()),allowIbeacons:false});
-      await binv('subscribe',{characteristic:GLM.CHR,service:GLM.SVC,onData:bchan(v=>onLaserData(v))});
-      await binv('send',{characteristic:GLM.CHR,data:GLM.SYNC,writeType:'withResponse',service:GLM.SVC});
+      step='list services';try{svcs=await binv('list_services',{address:d.address});}catch(e){svcs=null;}
+      const T=laserTarget(svcs);step='subscribe to '+T.chr;
+      await binv('subscribe',{characteristic:T.chr,service:T.svc,onData:bchan(v=>onLaserData(v))});
+      step='turn on sync';await binv('send',{characteristic:T.chr,data:GLM.SYNC,writeType:T.wt,service:T.svc});
       lastLaser={address:d.address,name:d.name};try{localStorage.setItem('bm-laser',JSON.stringify(lastLaser));}catch(e){}
-      setLaserState('on',d.name&&d.name!==d.address?d.name:'Laser');toast('Connected to '+laser.name+'. Press Read, then measure.');
-    }catch(e){binv('disconnect').catch(()=>{});setLaserState('off');
-      laserFail(/service|characteristic|not found/i.test(String(e))?'That device isn’t a Bosch laser measure (it doesn’t have the laser’s Bluetooth service). Try another one in the list.':e);}};
+      laser.target=T;setLaserState('on',d.name&&d.name!==d.address?d.name:'Laser');toast('Connected to '+laser.name+'. Press Read, then measure.');
+    }catch(e){binv('disconnect').catch(()=>{});setLaserState('off');laserDiag(d,svcs,step,e);}};
   const progress=()=>{const n=laser.scanList.length,k=laser.scanList.filter(isLaserDev).length;
     note(done?'':k?`Found ${k===1?'a laser':k+' lasers'}. Tap it to connect.`:`Searching… ${n} Bluetooth device${n===1?'':'s'} nearby so far.`);};
   const finish=()=>{if(done)return;stop();const n=laser.scanList.length,k=laser.scanList.filter(isLaserDev).length;
