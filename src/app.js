@@ -2376,17 +2376,22 @@ function laserFail(e){const msg=String(e&&e.message||e);
 const binv=(c,a)=>TAURI.core.invoke('plugin:blec|'+c,a||{});
 function bchan(fn){const ch=new TAURI.core.Channel();ch.onmessage=fn;return ch;}
 let lastLaser=null;try{lastLaser=JSON.parse(localStorage.getItem('bm-laser')||'null');}catch(e){}
+// does this look like a Bosch laser? by name, by Bosch's Bluetooth company id (0x02A6) or by the measuring service
+const isLaserDev=d=>GLM.NAME.test(d.name||'')||Object.keys(d.manufacturerData||{}).some(k=>+k===0x02A6)||(d.services||[]).some(u=>String(u).toLowerCase()===GLM.SVC);
 async function blecConnect(){
-  try{const ok=await binv('check_permissions',{askIfDenied:true});if(ok===false){laserFail('Bluetooth permission wasn’t given to Benchmark Planner.');return;}}
+  try{const ok=await binv('check_permissions',{askIfDenied:true});if(ok===false){laserFail('Bluetooth permission (“Nearby devices”) wasn’t given to Benchmark Planner. Allow it in the phone’s Settings → Apps → Benchmark Planner → Permissions.');return;}}
   catch(e){laserFail(/not found|unknown|plugin/i.test(String(e))?'This copy of the app was built without Bluetooth. Install the newest build.':e);return;}
+  try{const st=await binv('get_adapter_state');if(String(st).toLowerCase()==='off'){laserFail('Bluetooth is off on this device. Turn it on, then press Laser again.');return;}}catch(e){}
   const body=document.createElement('div');body.className='lzscan';
-  body.innerHTML=`<p class="tip" id="lzScanNote">Looking for laser measures… Switch the laser on and make sure Bluetooth is on in its menu.</p><div class="lzlist" id="lzList"></div>
-    <label class="lzall"><input type="checkbox" id="lzAll"> Show every Bluetooth device</label>`;
-  let done=false;const stop=()=>{if(done)return;done=true;binv('stop_scan').catch(()=>{});};
-  openModal('Connect a laser measure','',null,[{label:'Cancel',fn:()=>{stop();closeModal();}},{label:'Search again',fn:()=>{done=false;scan();}}],body);
-  const list=$('#lzList'),all=$('#lzAll');
-  const render=()=>{const devs=laser.scanList.filter(d=>all.checked||GLM.NAME.test(d.name||''));
-    list.innerHTML=devs.length?devs.map(d=>`<button class="btn lzdev" data-a="${esc(d.address)}"><b>${esc(d.name||'Unnamed device')}</b><span>${esc(d.address)}</span></button>`).join(''):'<p class="tip">Nothing found yet.</p>';
+  body.innerHTML=`<p class="tip" id="lzScanNote"></p><div class="lzlist" id="lzList"></div>
+    <label class="lzall"><input type="checkbox" id="lzAll"> Show every Bluetooth device</label>
+    <p class="tip">On the laser: switch it on, open its settings menu and turn Bluetooth on (the Bluetooth symbol shows in the display). Close the Bosch app if it is connected — the laser talks to one app at a time.</p>`;
+  let done=false,timer=0;const stop=()=>{if(done)return;done=true;clearTimeout(timer);binv('stop_scan').catch(()=>{});};
+  openModal('Connect a laser measure','',null,[{label:'Cancel',fn:()=>{stop();closeModal();}},{label:'Search again',fn:()=>{stop();done=false;scan();}}],body);
+  const list=$('#lzList'),all=$('#lzAll'),note=t=>{const n=$('#lzScanNote');if(n)n.textContent=t;};
+  const sig=r=>r==null?'':r>-60?'strong signal':r>-80?'good signal':'weak signal';
+  const render=()=>{const devs=laser.scanList.filter(d=>all.checked||isLaserDev(d)).sort((a,b)=>(isLaserDev(b)-isLaserDev(a))||((b.rssi||-999)-(a.rssi||-999)));
+    list.innerHTML=devs.length?devs.map(d=>{const nm=d.name&&d.name!==d.address?d.name:'Unnamed device';return `<button class="btn lzdev${isLaserDev(d)?' lzhit':''}" data-a="${esc(d.address)}"><b>${esc(nm)}</b><span>${esc(sig(d.rssi))} · ${esc(d.address)}</span></button>`;}).join(''):'<p class="tip">Nothing found yet.</p>';
     list.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{stop();pick(laser.scanList.find(d=>d.address===b.dataset.a));});};
   all.onchange=render;
   const pick=async d=>{if(!d)return;closeModal();setLaserState('connecting');
@@ -2394,12 +2399,19 @@ async function blecConnect(){
       await binv('subscribe',{characteristic:GLM.CHR,service:GLM.SVC,onData:bchan(v=>onLaserData(v))});
       await binv('send',{characteristic:GLM.CHR,data:GLM.SYNC,writeType:'withResponse',service:GLM.SVC});
       lastLaser={address:d.address,name:d.name};try{localStorage.setItem('bm-laser',JSON.stringify(lastLaser));}catch(e){}
-      setLaserState('on',d.name||'Laser');toast('Connected to '+laser.name+'. Press Read, then measure.');
-    }catch(e){binv('disconnect').catch(()=>{});setLaserState('off');laserFail(e);}};
-  const scan=()=>{laser.scanList=[];render();$('#lzScanNote').textContent='Looking for laser measures… Switch the laser on and make sure Bluetooth is on in its menu.';
-    binv('scan',{timeout:12000,onDevices:bchan(devs=>{if(done)return;laser.scanList=devs||[];render();
+      setLaserState('on',d.name&&d.name!==d.address?d.name:'Laser');toast('Connected to '+laser.name+'. Press Read, then measure.');
+    }catch(e){binv('disconnect').catch(()=>{});setLaserState('off');
+      laserFail(/service|characteristic|not found/i.test(String(e))?'That device isn’t a Bosch laser measure (it doesn’t have the laser’s Bluetooth service). Try another one in the list.':e);}};
+  const progress=()=>{const n=laser.scanList.length,k=laser.scanList.filter(isLaserDev).length;
+    note(done?'':k?`Found ${k===1?'a laser':k+' lasers'}. Tap it to connect.`:`Searching… ${n} Bluetooth device${n===1?'':'s'} nearby so far.`);};
+  const finish=()=>{if(done)return;stop();const n=laser.scanList.length,k=laser.scanList.filter(isLaserDev).length;
+    if(k)note('Search finished. Tap your laser to connect.');
+    else if(n){all.checked=true;render();note(`No device named like a Bosch laser among the ${n} found. If one of these is your laser (it may show without a name — try the strongest signal), tap it. Otherwise check the laser’s Bluetooth and Search again.`);}
+    else note('No Bluetooth devices found at all. Check that Bluetooth is on, and on Android 11 or older also turn on Location (Android needs it to search). Then Search again.');};
+  const scan=()=>{laser.scanList=[];render();note('Searching… Keep the laser on and close to this device.');
+    timer=setTimeout(finish,15000);
+    binv('scan',{timeout:15000,onDevices:bchan(devs=>{if(done)return;laser.scanList=devs||[];render();progress();
       const again=lastLaser&&laser.scanList.find(d=>d.address===lastLaser.address);if(again){stop();pick(again);}}),allowIbeacons:false})
-      .then(()=>{if(!done&&$('#lzScanNote'))$('#lzScanNote').textContent=laser.scanList.length?'Search finished. Pick your laser.':'No laser found. Check that it is on, then Search again.';})
       .catch(e=>{stop();closeModal();laserFail(e);});};
   scan();}
 async function laserDisconnect(){laser.waiter=null;const was=laser.state;laser.state='off';

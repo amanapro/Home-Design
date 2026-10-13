@@ -220,6 +220,8 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 #lzLast{margin-top:10px}
 .lzdbg{margin-top:10px;font-size:12px;color:var(--muted)}.lzdbg code{display:block;margin-top:4px;font-family:var(--f-mono);font-size:11.5px;word-break:break-all;color:var(--ink)}
 .lzlist{display:flex;flex-direction:column;gap:6px;margin:10px 0;max-height:40vh;overflow:auto}
+.lzdev.lzhit{border-color:#e0761f;background:#fff1e4}
+:root[data-theme="dark"] .lzdev.lzhit{background:#3a2414}
 .lzdev{display:flex;justify-content:space-between;gap:12px;text-align:left;border:1px solid var(--line);padding:8px 10px}.lzdev span{font-family:var(--f-mono);font-size:11.5px;color:var(--muted)}
 .lzall{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
 .status .coords{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
