@@ -17,6 +17,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
+# Exit the app after the "save before exit?" question (Android back button, window close)
+tauri-plugin-process = "2"
 # Bluetooth Low Energy, for reading lengths from a Bosch laser measure (GLM 400 C / GLM 50 C / GLM 100 C)
 tauri-plugin-blec = "0.17"
 

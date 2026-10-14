@@ -211,6 +211,7 @@ The **Outdoor** section in the tool panel has three groups.
 
 ## Using the app
 
+- Leaving the app: the Android back button first steps out of whatever is open (a dialog, Walk mode, the details panel, a tool, a selection). Then it asks before exiting: **Save and exit** / **Exit without saving** when a project has unsaved changes, or "Are you sure you want to exit?" when everything is saved. Closing the window on a computer asks the same. In a browser, back asks the same way and the browser warns before closing a tab with unsaved work.
 - On a phone, the side panel (sizes and settings of what you select, takeoff and schedule) slides up from the bottom when you tap something, and the plan moves so your selection stays in view. **Details** at the bottom left of the plan opens or closes it at any time; **Close** or the grab bar hides it.
 - Tool panel (left): click « or press `[` to fold it to an icon rail, and click a section title (Draw, Kitchen, Bath) to fold that section. Hover an icon for its name.
 - `V` Pointer: drag a wall to push or pull it, or turn on **Free move** (`M`, or hold `Shift`) to drag it in any direction. Drag an end square to change length. Arrow keys move the selection 10 mm (`Shift`: 100 mm).

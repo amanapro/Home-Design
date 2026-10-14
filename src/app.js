@@ -2286,10 +2286,10 @@ function toDXF(opts){
   return [...H,...T,'0','SECTION','2','BLOCKS','0','ENDSEC','0','SECTION','2','ENTITIES',...E,'0','ENDSEC','0','EOF'].join('\r\n')+'\r\n';}
 
 /* ============================== modal ============================== */
-function openModal(title,text,area,buttons,bodyNode,wide){$('#modalTitle').textContent=title;$('#modalText').textContent=text;const ta=$('#modalArea');ta.hidden=area==null;if(area!=null)ta.value=area;
+function openModal(title,text,area,buttons,bodyNode,wide){delete $('#modal').dataset.exit;$('#modalTitle').textContent=title;$('#modalText').textContent=text;const ta=$('#modalArea');ta.hidden=area==null;if(area!=null)ta.value=area;
   const mb=$('#modalBody');mb.innerHTML='';if(bodyNode)mb.appendChild(bodyNode);mb.hidden=!bodyNode;$('#modal .card').classList.toggle('wide',!!wide);
   const bb=$('#modalBtns');bb.innerHTML='';buttons.forEach(b=>{const e=document.createElement('button');e.className='btn'+(b.primary?' primary':'');e.textContent=b.label;e.onclick=()=>b.fn(e);bb.appendChild(e);});$('#modal').hidden=false;bb.lastChild&&bb.lastChild.focus();}
-function closeModal(){$('#modal').hidden=true;$('#modalBody').innerHTML='';}
+function closeModal(){$('#modal').hidden=true;$('#modalBody').innerHTML='';delete $('#modal').dataset.exit;}
 function copyText(s,btn){const done=()=>{btn.textContent='Copied';setTimeout(()=>btn.textContent='Copy',1600);};
   try{navigator.clipboard.writeText(s).then(done,()=>{$('#modalArea').hidden=false;$('#modalArea').value=s;$('#modalArea').select();btn.textContent='Press Ctrl+C';});}catch(e){$('#modalArea').select();}}
 $('#csvBtn').onclick=e=>{const s=takeoffCSV();const b=e.currentTarget;try{navigator.clipboard.writeText(s).then(()=>{b.textContent='Copied';setTimeout(()=>b.textContent='Copy as CSV',1600);},()=>openModal('Takeoff CSV','Select all and copy.',s,[{label:'Close',fn:closeModal}]));}catch(err){openModal('Takeoff CSV','Select all and copy.',s,[{label:'Close',fn:closeModal}]);}};
@@ -3633,13 +3633,52 @@ let narrow=window.innerWidth<900;
 window.addEventListener('resize',()=>{const n=window.innerWidth<900;if(n!==narrow){narrow=n;requestAnimationFrame(()=>{fit();frame3d();draw3d();});}dirty();draw3d();});
 function loop(){if(needDraw){needDraw=false;drawPlan();drawElev();}requestAnimationFrame(loop);}
 
+
+/* ============================== leaving the app: back button, closing the window ============================== */
+// Android back steps out of whatever is open first (a dialog, Walk mode, the details panel, a tool), and only then asks to exit.
+// Exiting asks to save projects with unsaved changes; with nothing unsaved it just asks "are you sure?".
+let exiting=false;
+const unsavedTabs=()=>{storeActive();return tabs.filter(t=>tabDirty(t)&&!tabIsBlank(t));};
+async function reallyExit(){exiting=true;try{saveTabsNow();}catch(e){}
+  if(TAURI){try{if(TAURI.process&&TAURI.process.exit){await TAURI.process.exit(0);return;}}catch(e){}
+    try{await TAURI.core.invoke('plugin:process|exit',{code:0});return;}catch(e){}
+    try{await TAURI.window.getCurrentWindow().destroy();return;}catch(e){}}
+  else{try{history.go(-2);}catch(e){}setTimeout(()=>{try{window.close();}catch(e){}},300);}}
+async function saveAllAndExit(list){for(const t of list){if(t!==activeTab)switchTab(t.id);const ok=await saveProject(false);if(!ok){toast('Not saved, so the app stays open.');return;}}reallyExit();}
+function exitDialog(){if(!$('#modal').hidden&&$('#modal').dataset.exit)return;const list=unsavedTabs();
+  if(list.length){const names=list.map(t=>'“'+(t.M.name||'Untitled project')+'”').join(', ');
+    openModal('Save your work before you exit?',(list.length>1?'These projects have':'This project has')+' changes that aren’t saved to a file yet: '+names+'.',null,
+      [{label:'Cancel',fn:closeModal},{label:'Exit without saving',fn:()=>{closeModal();reallyExit();}},{label:list.length>1?'Save all and exit':'Save and exit',primary:true,fn:()=>{closeModal();saveAllAndExit(list);}}]);}
+  else openModal('Exit Benchmark Planner?','Are you sure you want to exit?',null,[{label:'Cancel',fn:closeModal},{label:'Exit',primary:true,fn:()=>{closeModal();reallyExit();}}]);
+  $('#modal').dataset.exit='1';}
+function handleBack(){
+  if(!$('#modal').hidden){closeModal();return;}
+  if(document.getElementById('doorPick')){closeDoorPick();return;}
+  const lm=$('#lookMenu');if(lm&&!lm.hidden){lm.hidden=true;return;}
+  if(typeof closeTextEditor==='function'&&document.querySelector('.texted')){closeTextEditor(false);return;}
+  if(walk.on){walkStop();return;}
+  if($('#app').classList.contains('sheet')){setSheet(false);return;}
+  if(laser.picking){laser.picking=false;$('#hint').innerHTML=HINTS[tool]||'';return;}
+  if(tool!=='select'){setTool('select');return;}
+  if(sel){sel=null;renderInspector();dirty();return;}
+  exitDialog();}
+function wireExit(){
+  if(TAURI){
+    try{if(TAURI.app&&TAURI.app.onBackButtonPress)TAURI.app.onBackButtonPress(()=>handleBack());}catch(e){}
+    try{const w=TAURI.window&&TAURI.window.getCurrentWindow&&TAURI.window.getCurrentWindow();if(w&&w.onCloseRequested&&!/android/i.test(navigator.userAgent))w.onCloseRequested(e=>{if(exiting)return;e.preventDefault();exitDialog();});}catch(e){}
+    return;}
+  // web version: the browser warns before leaving with unsaved work; on the back button we ask first
+  window.addEventListener('beforeunload',e=>{if(exiting||!unsavedTabs().length)return;e.preventDefault();e.returnValue='';});
+  if(window.top!==window.self)return;
+  try{history.pushState({bm:1},'');window.addEventListener('popstate',()=>{if(exiting)return;history.pushState({bm:1},'');handleBack();});}catch(e){}}
+
 /* boot */
 if(!loadTabs())migrateOld();
 M=activeTab.M;readColors();
 setSnap(snapOn);setFree(freeMove,true);setEmptyDrag(emptyDrag);setView('plan');setCut(true);
 activate(activeTab,true);syncAutosaveUI();
 if(three.ok){applyLook();syncWalkUI();}
-$('#laserBtn').onclick=laserBtnClick;renderLaserBtn();
+$('#laserBtn').onclick=laserBtnClick;renderLaserBtn();wireExit();
 $('#detailsBtn').onclick=()=>setSheet(!$('#app').classList.contains('sheet'));$('#sheetClose').onclick=()=>setSheet(false);$('#sheetGrip').onclick=()=>setSheet(false);
 requestAnimationFrame(()=>{fit();frame3d();build3d();loop();});
 if(!three.ok){$('.pane3d .panelabel').textContent='3D unavailable: the 3D library did not load';}
