@@ -190,7 +190,7 @@ Object.assign(CAT,OUTDOOR_CAT);
 
 
 /* ============================== model ============================== */
-let M, rooms=[], units='mm', view={s:0.1,ox:0,oy:0};
+let M, rooms=[], units=(()=>{try{return localStorage.getItem('bm-units')||'mm';}catch(e){return 'mm';}})(), view={s:0.1,ox:0,oy:0};
 function sampleModel(){
   uid=1;
   const W=(a,b,t,h=2700)=>({id:nid('w'),a,b,t,h});
@@ -1139,7 +1139,7 @@ function erasePanel(){const has=refImage||refDrawing;
   return `<p class="h">Eraser</p><p class="tip">${has?'Everything the eraser can remove is shown <b style="color:var(--danger)">in red</b>: what is left of the imported picture or drawing (dimension lines, furniture, fixtures, text). Drag over it to rub it out. Walls, doors, windows, fixtures and text you added are never touched.':'There is nothing imported under the plan to erase.'}</p>
     <div class="kv"><label for="eraseSz">Brush size</label><input type="range" id="eraseSz" min="8" max="120" step="2" value="${eraseSize}" aria-label="Brush size"></div>
     <div class="rowbtns"><button class="btn" id="eraseUndoBtn"${eraseStack.length?'':' disabled'}>Undo erase</button>${has?'<button class="btn" id="eraseAllBtn">Remove all of it</button>':''}</div>
-    <p class="tip">The measurements with tick marks along the outside of the plan are the app's own wall dimensions, not part of the picture. Turn them off with <b>Measures</b> at the top of the plan.</p>`;}
+    <p class="tip">The measurements with tick marks along the outside of the plan are the app's own wall dimensions, not part of the picture. Turn them off with <b>Measures</b> in the top bar.</p>`;}
 function bindErase(){const r=$('#eraseSz');if(r)r.oninput=()=>{eraseSize=+r.value;dirty();};
   const u=$('#eraseUndoBtn');if(u)u.onclick=eraseUndo;
   const a=$('#eraseAllBtn');if(a)a.onclick=()=>{eraseStack.push(eraseSnapshot());eraseLastAll=true;setReference(null);setRefImage(null);setTool('select');renderInspector();toast('Everything under the plan removed. Ctrl+Z (or Undo) brings it back.');};}
@@ -2737,7 +2737,7 @@ function storeActive(){const t=activeTab;if(!t)return;Object.assign(t,{M,undo:un
 function tabDirty(t){return t.savedSnap!==(t===activeTab?snapshot():JSON.stringify(t.M));}
 function activate(t,fitIt){if(typeof walk!=='undefined'&&walk.on)walkStop();activeTab=t;M=t.M;undoStack=t.undo;redoStack=t.redo;filePath=t.filePath;elevPt=t.elevPt||null;
   setReference(t.ref||null,true);setRefImage(t.img||null,true);if(typeof eraseStack!=='undefined')eraseStack.length=0;
-  fixUid();setUnits(t.units||units);sel=null;hover=null;drag=null;setTool('select');$('#projName').value=M.name;changed();
+  fixUid();setUnits(units);sel=null;hover=null;drag=null;setTool('select');$('#projName').value=M.name;changed();
   if(t.view&&!fitIt)Object.assign(view,t.view);else requestAnimationFrame(()=>{fit();});frame3d();build3d();renderTabs();}
 function switchTab(id){if(activeTab&&activeTab.id===id)return;const t=tabs.find(x=>x.id===id);if(!t)return;closeTextEditor&&closeTextEditor(false);storeActive();saveTabsNow();activate(t);}
 function newTab(model,o){storeActive();const t=makeTab(model,o);t.savedSnap=JSON.stringify(t.M);tabs.push(t);activate(t,true);saveTabsNow();return t;}
@@ -2834,13 +2834,13 @@ function drawReference(){drawRefImage();if(!refDrawing||!refVisible||!refPath)re
 const fileMenu=$('#fileMenu'),fileBtn=$('#fileBtn');
 function closeFileMenu(){fileMenu.hidden=true;fileBtn.setAttribute('aria-expanded','false');}
 fileBtn.addEventListener('click',e=>{e.stopPropagation();const open=fileMenu.hidden;fileMenu.hidden=!open;fileBtn.setAttribute('aria-expanded',String(open));if(open)(fileMenu.querySelector('button:not([hidden])')||fileBtn).focus();});
-fileMenu.addEventListener('click',e=>{if(e.target.closest('button'))closeFileMenu();});
+fileMenu.addEventListener('click',e=>{if(e.target.closest('button')&&!e.target.closest('#unitSeg'))closeFileMenu();});
 document.addEventListener('pointerdown',e=>{if(!fileMenu.hidden&&!e.target.closest('.menuwrap'))closeFileMenu();});
 fileMenu.addEventListener('keydown',e=>{const items=[...fileMenu.querySelectorAll('button:not([hidden])')];const i=items.indexOf(document.activeElement);
   if(e.key==='Escape'){closeFileMenu();fileBtn.focus();}else if(e.key==='ArrowDown'){e.preventDefault();items[(i+1)%items.length].focus();}else if(e.key==='ArrowUp'){e.preventDefault();items[(i-1+items.length)%items.length].focus();}});
 function updateMeasUI(){const on=Object.keys(MEAS_DEF).filter(k=>MEAS[k]).length;$('#measBtn').setAttribute('aria-pressed',String(on>0));$('#measBtn').textContent=on?'Measures ▾':'Measures off ▾';
   document.querySelectorAll('[data-meas]').forEach(cb=>cb.checked=!!MEAS[cb.dataset.meas]);}
-$('#measBtn').onclick=e=>{e.stopPropagation();const m=$('#measMenu'),open=m.hidden;m.hidden=!open;$('#measBtn').setAttribute('aria-expanded',String(open));if(open)(m.querySelector('input')||m).focus();};
+$('#measBtn').onclick=e=>{e.stopPropagation();const m=$('#measMenu'),open=m.hidden;m.hidden=!open;if(open){m.style.left='';m.style.right='';const r=m.getBoundingClientRect();if(r.left<8){m.style.left='0';m.style.right='auto';}}$('#measBtn').setAttribute('aria-expanded',String(open));if(open)(m.querySelector('input')||m).focus();};
 document.querySelectorAll('[data-meas]').forEach(cb=>cb.onchange=()=>{MEAS[cb.dataset.meas]=cb.checked;saveMeas();updateMeasUI();dirty();});
 $('#measAll').onclick=()=>{Object.keys(MEAS_DEF).forEach(k=>MEAS[k]=true);saveMeas();updateMeasUI();dirty();};
 $('#measNone').onclick=()=>{Object.keys(MEAS_DEF).forEach(k=>MEAS[k]=false);saveMeas();updateMeasUI();dirty();};
@@ -3797,7 +3797,8 @@ function changed(){if(typeof checkRefLeftover==='function'&&(refImage||refDrawin
   $('#undoBtn').disabled=!undoStack.length;$('#redoBtn').disabled=!redoStack.length;save();}
 function setView(v){$('#stage').dataset.view=v;['vPlan','vSplit','vElev','v3d'].forEach(id=>{const b=$('#'+id);b.setAttribute('aria-pressed',String(b.dataset.view===v));});
   requestAnimationFrame(()=>{dirty();draw3d();});}
-function setUnits(u){units=normUnits(u);document.querySelectorAll('#unitSeg button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.units===units)));renderInspector();renderTakeoff();dirty();save();
+// Units are one setting for the whole app (File menu): every open project shows them, and the app starts with them next time.
+function setUnits(u){units=normUnits(u);try{localStorage.setItem('bm-units',units);}catch(e){}try{tabs.forEach(t=>t.units=units);}catch(e){}document.querySelectorAll('#unitSeg button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.units===units)));renderInspector();renderTakeoff();dirty();save();
   document.querySelectorAll('.lib button[data-type]').forEach(b=>{const c=CAT[b.dataset.type];b.querySelector('.libw').textContent=fmtLen(c.w);b.title=c.label+': '+[c.w,c.d,c.h].map(v=>fmtLen(v,true)).join(' × ');});}
 function setFree(v,quiet){freeMove=!!v;$('#freeToggle').setAttribute('aria-pressed',String(freeMove));renderInspector();dirty();save();
   if(!quiet&&tool==='select'){$('#snapchip').textContent=freeMove?'free move on':'push / pull';clearTimeout(setFree.t);setFree.t=setTimeout(()=>$('#snapchip').textContent='',1400);}}
@@ -3807,7 +3808,7 @@ function setEmptyDrag(v){emptyDrag=v;$('#dragBox').setAttribute('aria-pressed',S
 $('#snapToggle').onclick=()=>setSnap(!snapOn);$('#dragBox').onclick=()=>setEmptyDrag('box');$('#dragPan').onclick=()=>setEmptyDrag('pan');
 function setCut(c){cutaway=c;$('#cutOn').setAttribute('aria-pressed',String(c));$('#cutOff').setAttribute('aria-pressed',String(!c));build3d();}
 ['vPlan','vSplit','vElev','v3d'].forEach(id=>$('#'+id).onclick=e=>setView(e.currentTarget.dataset.view));
-document.querySelectorAll('#unitSeg button').forEach(b=>b.onclick=()=>setUnits(b.dataset.units));
+document.querySelectorAll('#unitSeg button').forEach(b=>b.onclick=()=>{setUnits(b.dataset.units);toast('Units: '+b.textContent+'. The app will start with them next time too.');});
 $('#cutOn').onclick=()=>setCut(true);$('#cutOff').onclick=()=>setCut(false);
 $('#walkOn').onclick=()=>walkStart();$('#walkOff').onclick=()=>walkStop();
 $('#walkRoom').onchange=e=>{const r=rooms[+e.target.value];if(r){walk.on=false;walkStart(null,r);}};

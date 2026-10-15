@@ -21,9 +21,18 @@
     <div class="seg" role="group" aria-label="View">
       <button id="vPlan" data-view="plan">Plan</button><button id="vSplit" data-view="split">Plan + 3D</button><button id="vElev" data-view="elev">Elevations</button><button id="v3d" data-view="3d">3D</button>
     </div></div>
-    <div class="seg" role="group" aria-label="Units" id="unitSeg">
-      <button data-units="mm">mm</button><button data-units="cm">cm</button><button data-units="m">m</button><button data-units="imperial">ft-in</button>
-    </div>
+    <div class="menuwrap measwrap"><button class="btn togglebtn" id="measBtn" aria-haspopup="true" aria-expanded="false" aria-controls="measMenu" aria-pressed="true" title="Choose which measurements show on the plan">Measures ▾</button>
+          <div class="menu measmenu" id="measMenu" hidden>
+            <p class="mh">Show on the plan</p>
+            <label><input type="checkbox" data-meas="ext"> <span>Outside wall dimensions</span></label>
+            <label><input type="checkbox" data-meas="walls"> <span>Length of every wall</span></label>
+            <label><input type="checkbox" data-meas="openings"> <span>Door and window widths</span></label>
+            <label><input type="checkbox" data-meas="edit"> <span>While drawing, selecting and moving<small>wall lengths, distances of doors, windows and columns</small></span></label>
+            <label><input type="checkbox" data-meas="rooms"> <span>Room areas and sizes</span></label>
+            <label><input type="checkbox" data-meas="areas"> <span>Measured areas<small>off hides plain measurements completely; yard surfaces and room areas keep their colour</small></span></label>
+            <label><input type="checkbox" data-meas="kept"> <span>Kept ruler dimensions</span></label>
+            <div class="rowbtns"><button class="btn" id="measAll">Show all</button><button class="btn" id="measNone">Hide all</button></div>
+          </div></div>
     <button class="btn" id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
     <button class="btn" id="redoBtn" title="Redo (Ctrl+Shift+Z)">Redo</button>
     <button class="btn" id="fitBtn" title="Zoom to fit (F)">Fit</button>
@@ -35,6 +44,7 @@
         <button role="menuitem" id="saveBtn">Save project<kbd>Ctrl+S</kbd></button>
         <button role="menuitem" id="saveAsBtn">Save project as…<kbd>Ctrl+Shift+S</kbd></button>
         <button role="menuitem" id="autosaveBtn">Autosave every 5 minutes<span id="autosaveState">On</span></button>
+        <div class="menuunits"><span>Units</span><div class="seg" role="group" aria-label="Units" id="unitSeg"><button data-units="mm">mm</button><button data-units="cm">cm</button><button data-units="m">m</button><button data-units="imperial">ft-in</button></div></div>
         <hr>
         <button role="menuitem" id="importBtn">Import from AutoCAD (DXF)…<kbd>Ctrl+I</kbd></button>
         <button role="menuitem" id="planImgBtn">Import plan image or PDF…</button>
@@ -118,18 +128,6 @@
       <div class="paneopts planopts">
         <button class="btn" id="pasteBtn" title="Paste the copied items (Ctrl+V)" hidden>Paste</button>
         <button class="btn togglebtn" id="elecBtn" aria-pressed="true" title="Show or hide the electrical layer: lights, switches and sockets">Electrical</button>
-        <div class="menuwrap measwrap"><button class="btn togglebtn" id="measBtn" aria-haspopup="true" aria-expanded="false" aria-controls="measMenu" aria-pressed="true" title="Choose which measurements show on the plan">Measures ▾</button>
-          <div class="menu measmenu" id="measMenu" hidden>
-            <p class="mh">Show on the plan</p>
-            <label><input type="checkbox" data-meas="ext"> <span>Outside wall dimensions</span></label>
-            <label><input type="checkbox" data-meas="walls"> <span>Length of every wall</span></label>
-            <label><input type="checkbox" data-meas="openings"> <span>Door and window widths</span></label>
-            <label><input type="checkbox" data-meas="edit"> <span>While drawing, selecting and moving<small>wall lengths, distances of doors, windows and columns</small></span></label>
-            <label><input type="checkbox" data-meas="rooms"> <span>Room areas and sizes</span></label>
-            <label><input type="checkbox" data-meas="areas"> <span>Measured areas<small>off hides plain measurements completely; yard surfaces and room areas keep their colour</small></span></label>
-            <label><input type="checkbox" data-meas="kept"> <span>Kept ruler dimensions</span></label>
-            <div class="rowbtns"><button class="btn" id="measAll">Show all</button><button class="btn" id="measNone">Hide all</button></div>
-          </div></div>
         <button class="btn togglebtn" id="refToggle" aria-pressed="true" title="Show or hide the imported reference drawing" hidden>Reference</button>
         <button class="btn togglebtn" id="freeToggle" aria-pressed="false" title="Drag a wall in any direction instead of only in and out (M)">Free move</button>
         <button class="btn togglebtn" id="snapToggle" aria-pressed="true" title="Snap to wall ends, alignments, angles and a 10 mm grid (S)">Snap</button>
