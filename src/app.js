@@ -435,7 +435,7 @@ function undo(){if((tool==='erase'||eraseLastAll)&&eraseStack.length){eraseLastA
 function redo(){if(!redoStack.length)return;undoStack.push(snapshot());M=JSON.parse(redoStack.pop());fixUid();sel=null;changed();}
 // Next free id number across everything that has one, and repair any duplicate ids left by older versions
 // (they made two pillars or dimensions select as one).
-function fixUid(){const all=[M.walls,M.openings,M.items,M.cols,M.dims,M.arcs,M.areas,M.texts,M.elec].filter(Array.isArray);let mx=0;
+function fixUid(){const all=[M.walls,M.openings,M.items,M.cols,M.dims,M.arcs,M.areas,M.texts,M.elec,...(M.ep?[M.ep.devs,M.ep.wires,M.ep.tubes,(M.ep.devs||[]).flatMap(d=>d.brk||[])]:[])].filter(Array.isArray);let mx=0;
   all.forEach(arr=>arr.forEach(o=>{const n=parseInt(String(o.id).slice(1));if(n>mx)mx=n;}));uid=mx+1;
   const seen=new Set(M.walls.map(w=>w.id));[M.openings,M.items,M.cols,M.dims].filter(Array.isArray).forEach(arr=>arr.forEach(o=>{
     if(seen.has(o.id))o.id=String(o.id).charAt(0)+(uid++);seen.add(o.id);}));}
@@ -616,7 +616,7 @@ function drawPlan(){
   // room labels
   rooms.forEach(drawRoomLabel);
   drawTexts();
-  drawElecLayer();
+  drawElecLayer();drawEplan();
   // elevation markers for the room shown in the elevation pane
   if(!EXP&&isElevView()){const r=elevRoom();if(r){ctx.strokeStyle=C.accent;ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.beginPath();r.net.forEach((p,i)=>{const q=toS(p);i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]);});ctx.closePath();ctx.stroke();ctx.setLineDash([]);
     r.elevs.forEach(e=>{const c=toS(add(e.mid,mul(e.nIn,Math.max(230,26/view.s))));const tip=toS(add(e.mid,mul(e.nIn,Math.max(40,4/view.s))));
@@ -1280,11 +1280,11 @@ function drawPasteGhost(){if(!clip||!pasteOff)return;
   clip.dims.forEach(d=>drawMeasure(add(d.a,off),add(d.b,off),C.accent,{}));
   ctx.restore();const q=toS(add(clip.anchor,off));ctx.strokeStyle=C.snap;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(q[0]-7,q[1]);ctx.lineTo(q[0]+7,q[1]);ctx.moveTo(q[0],q[1]-7);ctx.lineTo(q[0],q[1]+7);ctx.stroke();}
 $('#pasteBtn').onclick=startPaste;
-function syncToolButtons(){document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===tool&&((b.dataset.kind||null)===((tool==='wall'||tool==='area'||tool==='elec')?placeType:(b.dataset.kind||null))))));}
-function setTool(t,type){if(t==='elec'&&!elecOn){toast('Turn on Electrical (above the plan) to use the electrical tools.');syncToolButtons();return;}stripStart=null;elecGhost=null;if(t!==tool){closeTextEditor(false);ruler=null;arcDraw={a:null,b:null,s:0};areaDraw={pts:[],cur:null,snap:null};}tool=t;placeType=type||null;draw.start=null;ghost=null;hideLenbox();
+function syncToolButtons(){document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===tool&&((b.dataset.kind||null)===((tool==='wall'||tool==='area'||tool==='elec'||tool==='eplan')?placeType:(b.dataset.kind||null))))));}
+function setTool(t,type){if(t!=='eplan'){epDraw=null;epGhost=null;epKind=null;}if(t==='elec'&&!elecOn){toast('Turn on Electrical (above the plan) to use the electrical tools.');syncToolButtons();return;}stripStart=null;elecGhost=null;if(t!==tool){closeTextEditor(false);ruler=null;arcDraw={a:null,b:null,s:0};areaDraw={pts:[],cur:null,snap:null};}tool=t;placeType=type||null;draw.start=null;ghost=null;hideLenbox();
   syncToolButtons();
   document.querySelectorAll('.lib button[data-type]').forEach(b=>b.setAttribute('aria-pressed',String(t==='place'&&b.dataset.type===type)));
-  $('#hint').innerHTML=HINTS[t]||'';$('#snapchip').textContent='';planCv.style.cursor=t==='select'?'default':'crosshair';
+  $('#hint').innerHTML=(eMode?epHint(t,type):HINTS[t])||'';$('#snapchip').textContent='';planCv.style.cursor=t==='select'?'default':'crosshair';
   colGhost=t==='column'?{id:'ghost',x:cursor[0],y:cursor[1],r:colDefaults.r||0,shape:colDefaults.shape,w:colDefaults.w,d:colDefaults.d,h:colDefaults.h,gap:colDefaults.gap,place:'free',on:false}:null;
   if(t==='place'){const c=CAT[type];ghost={id:'ghost',type,x:cursor[0],y:cursor[1],r:0,w:c.w,d:c.d,h:c.h,z:c.z};if(type==='firepit')applyFirepitShape(ghost,firepitDefaults.shape);}
   if(t!=='select'&&t!=='place')sel=null;renderInspector();dirty();}
@@ -1355,6 +1355,7 @@ planCv.addEventListener('pointerdown',e=>{
   if(tool==='area'){areaToolClick(p);return;}
   if(tool==='text'){textToolClick(p);return;}
   if(tool==='elec'){elecToolClick(p);return;}
+  if(tool==='eplan'){epToolClick(p);return;}
   if(tool==='erase'){eraseStart(p);planCv.setPointerCapture(e.pointerId);return;}
   if(tool==='column'&&colGhost&&colGhost.on){const c={id:nid('c'),x:Math.round(colGhost.x*10)/10,y:Math.round(colGhost.y*10)/10,r:colGhost.r,shape:colGhost.shape,w:colGhost.w,d:colGhost.d,h:colGhost.h,gap:colGhost.gap};
     if(colGhost.wall){c.wall=colGhost.wall;c.s=Math.round(colGhost.s*10)/10;c.off=Math.round(colGhost.off*10)/10;}
@@ -1363,6 +1364,7 @@ planCv.addEventListener('pointerdown',e=>{
     if(from){if(dist(sn.p,from)>1){ruler.b=sn.p;ruler.cur=sn.p;}renderInspector();}
     else{ruler={a:sn.p,b:null,cur:sn.p,down:sp};planCv.setPointerCapture(e.pointerId);renderInspector();}
     dirty();return;}
+  if(tool==='select'&&eMode){epPointerDown(p,e,sp);return;}
   if(tool==='select'){const h=hitTest(p);const mod=e.ctrlKey||e.metaKey;
     if(!h||h.kind==='room'){
       if(emptyDrag==='box'){box={s0:sp,s1:sp,p0:p,add:mod||e.shiftKey,hit:h};}
@@ -1427,13 +1429,15 @@ planCv.addEventListener('pointermove',e=>{
       if(c.wall){const sl=hostSlot(add(p,drag.off),Object.assign({},c,{align:'keep'}),c.id);if(sl){if(sl.w.id!==c.wall)c.off=0;c.wall=sl.w.id;c.s=sl.s;if(sl.w.id===c.wall&&c.off==null)c.off=sl.off;syncHostedCols();drag.snap={kind:sl.kind};}drag.guides=[];}
       else{const sn=colSnap(c,add(p,drag.off),c.id);c.x=sn.c.x;c.y=sn.c.y;c.r=sn.c.r;drag.snap={kind:sn.kind};drag.guides=sn.guides;}}
     if(drag.kind==='elec')elecDragMove(drag,p);
+    if(drag.kind==='ep')epDragMove(drag,p);
     if(drag.kind==='elecs')elecGroupMove(drag,p);
     if(drag.kind==='item'){const it=M.items.find(x=>x.id===drag.id);const target=add(p,drag.off);const r=fixtureSnap(target,it);it.x=r.x;it.y=r.y;if(r.snapped)it.r=r.r;}
     if(drag.kind==='opening'){const o=M.openings.find(x=>x.id===drag.id);let w=nearestWall(p,24)||wallById(o.wall);const sl=openingSlot(p,w,o.w)||openingSlotLoose(p,w,o.w);if(sl){o.wall=w.id;o.s=sl.s;}}
     $('#snapchip').textContent=drag.snap&&drag.snap.kind!=='free'&&drag.snap.kind!=='angle'?drag.snap.kind:'';
     rooms=computeRooms();dirty();renderInspector();return;}
   updatePreview(p);
-  if(tool==='select'){ptrTouch=e.pointerType!=='mouse';const h=hitTest(p);const key=h&&h.kind!=='room'?h.kind+(h.id||'')+(h.end||''):'';if(key!==(hover&&hover.key)){hover=h&&h.kind!=='room'?Object.assign({key},h):null;dirty();}
+  if(tool==='select'&&eMode){const h=epHit(p);planCv.style.cursor=h?(h.pt!=null?'move':'pointer'):'default';}
+  if(tool==='select'&&!eMode){ptrTouch=e.pointerType!=='mouse';const h=hitTest(p);const key=h&&h.kind!=='room'?h.kind+(h.id||'')+(h.end||''):'';if(key!==(hover&&hover.key)){hover=h&&h.kind!=='room'?Object.assign({key},h):null;dirty();}
     let cur='default';if(h&&(h.kind==='colrot'||h.kind==='arcmid'||h.kind==='areamid'))cur='grab';else if(h&&(h.kind==='areapt'||h.kind==='area'||h.kind==='text'||h.kind==='roomlabel'||h.kind==='roomcorner'))cur='move';else if(h&&h.kind==='roomedge')cur='grab';else if(h&&h.kind==='end')cur='move';else if(h&&h.kind==='wall'){const d=wallDir(wallById(h.id));cur=freeMove?'move':Math.abs(d[0])>0.92?'ns-resize':Math.abs(d[1])>0.92?'ew-resize':'move';}else if(h&&h.kind!=='room')cur='move';planCv.style.cursor=cur;}
 });
 function dragWall(dv){
@@ -1630,6 +1634,7 @@ function drawMeasure(a,b,color,opts={}){
 function keepRuler(){if(!ruler||!ruler.b||dist(ruler.a,ruler.b)<1)return;const d={id:nid('m'),a:ruler.a.map(v=>Math.round(v*10)/10),b:ruler.b.map(v=>Math.round(v*10)/10)};
   mutate(()=>M.dims.push(d));ruler=null;renderInspector();dirty();toast('Kept as a dimension. Select it with the Pointer to delete it.');}
 function updatePreview(p){
+  if(tool==='eplan'){epToolMove(p);return;}
   if(tool==='elec'){elecToolMove(p);return;}
   if(tool==='area'){areaToolMove(p);dirty();}
   if(tool==='arcwall'){arcToolMove(p);if(arcDraw.b&&!lenbox.hidden)positionLenbox();dirty();}
@@ -1669,7 +1674,7 @@ function endPointer(e){
   if(drag){$('#snapchip').textContent='';if(drag.moved){pushUndo(drag.snap0);
       if(drag.kind==='end'){M.walls=M.walls.filter(w=>wallLen(w)>5);}changed();}drag=null;dirty();}}
 planCv.addEventListener('pointerup',endPointer);planCv.addEventListener('pointercancel',endPointer);
-planCv.addEventListener('dblclick',()=>{if(tool==='wall'){draw.start=null;draw.chainStart=null;dirty();}
+planCv.addEventListener('dblclick',()=>{if(eMode){if(tool==='eplan'&&epDraw)epFinish();else if(tool==='select')epDbl(cursor);return;}if(tool==='wall'){draw.start=null;draw.chainStart=null;dirty();}
   if(tool==='area'){const A=areaDraw;if(A.pts.length>=3){finishArea();return;}
     const r=roomAt(cursor);A.pts=[];if(!r){toast('Double-click inside a room to take its outline, or click the corners of the shape.');renderInspector();dirty();return;}
     const o=areaFromRoom(r);if(!o)return;const n=(M.areas||[]).length+1;const B={id:nid('g'),name:r.name||'Area '+n,pts:o.pts.map(p=>p.map(v=>Math.round(v*10)/10)),b:o.b};
@@ -1719,6 +1724,7 @@ window.addEventListener('keydown',e=>{
   const mod=e.ctrlKey||e.metaKey;
   if(mod&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redo():undo();return;}
   if(mod&&e.key.toLowerCase()==='y'){e.preventDefault();redo();return;}
+  if(mod&&eMode&&'cvda'.includes(e.key.toLowerCase())){e.preventDefault();return;}   // copy/paste is for the home plan
   if(mod&&e.key.toLowerCase()==='c'){if(sel){e.preventDefault();copySel();}return;}
   if(mod&&e.key.toLowerCase()==='v'){e.preventDefault();startPaste();return;}
   if(mod&&e.key.toLowerCase()==='d'){if(sel){e.preventDefault();if(copySel(true))startPaste();}return;}
@@ -1728,6 +1734,7 @@ window.addEventListener('keydown',e=>{
   if(tool==='arcwall'&&arcDraw.a&&/^[0-9.]$/.test(e.key)){e.preventDefault();showLenbox(e.key);lenInput.placeholder=arcDraw.b?'radius':'distance to the end';return;}
   if(tool==='arcwall'&&e.key==='Escape'&&arcDraw.a){arcDraw={a:null,b:null,s:0};dirty();return;}
   const k=e.key.toLowerCase();
+  if(epKey(e,k))return;
   const arrows={arrowleft:[-1,0],arrowright:[1,0],arrowup:[0,-1],arrowdown:[0,1]};
   if(arrows[k]&&sel&&tool==='select'){e.preventDefault();nudge(arrows[k],e.shiftKey?10:1);return;}
   if(tool==='ruler'&&k==='enter'&&ruler&&ruler.b){e.preventDefault();keepRuler();return;}
@@ -1794,6 +1801,7 @@ function sheetReveal(){const p=selPoint();if(!p)return;const pr=planCv.getBoundi
   const sp=toS(p);if(sp[1]>top&&sp[1]<bottom)return;view.oy+=((top+bottom)/2)-sp[1];dirty();}
 function sheetFollowSel(){if(!isNarrow())return;const k=sel?JSON.stringify(sel):null;if(k===sheetSel)return;sheetSel=k;setSheet(!!k);if(k)setTimeout(sheetReveal,240);}
 function renderInspector(){setTimeout(sheetFollowSel,0);
+  if(eMode){$('#inspector').innerHTML=epInspectorHTML();epBindInspector();return;}
   const el=$('#inspector');let h='';
   if(!sel){
     if(tool==='ruler'){el.innerHTML=rulerPanel();bindRuler();return;}
@@ -1982,7 +1990,7 @@ function bindInspector(){
     const mt=$('#mT');if(mt)mt.onchange=()=>setAll('t',mt.value,20);const mh=$('#mH');if(mh)mh.onchange=()=>setAll('h',mh.value,300);}
   const db=$('#delBtn');if(db)db.onclick=deleteSel;const cb=$('#copyBtn');if(cb)cb.onclick=()=>copySel();}
 function rotV(v,deg){const a=deg*Math.PI/180;return [v[0]*Math.cos(a)-v[1]*Math.sin(a),v[0]*Math.sin(a)+v[1]*Math.cos(a)];}
-function renderTakeoff(){
+function renderTakeoff(){epSidePanel();
   const t=$('#qtable');let tot={f:0,w:0,s:0,t:0};
   let h=`<thead><tr><th>Room</th><th>Floor</th><th>Walls</th><th>Tile</th><th>Skirt.</th></tr></thead><tbody>`;
   rooms.forEach((r,i)=>{tot.f+=r.netArea;tot.w+=r.wallArea;tot.s+=r.skirting;tot.t+=r.tileArea;
@@ -3793,7 +3801,7 @@ function renderLookMenu(){const m=$('#lookMenu');if(!m)return;const auto=Q3D[aut
 
 /* ============================== wiring ============================== */
 function changed(){if(typeof checkRefLeftover==='function'&&(refImage||refDrawing))checkRefLeftover();if(!Array.isArray(M.arcs))M.arcs=[];if(!Array.isArray(M.areas))M.areas=[];if(!Array.isArray(M.texts))M.texts=[];if(!Array.isArray(M.dims))M.dims=[];if(!Array.isArray(M.cols))M.cols=[];
-  if(M.cols.some(c=>c.wall!=null)){syncHostedCols();M.cols.forEach(c=>{delete c.wall;delete c.s;delete c.off;});}clampOpenings();rooms=computeRooms();fillElevSelect();renderInspector();renderTakeoff();schedule3d();dirty();
+  if(M.cols.some(c=>c.wall!=null)){syncHostedCols();M.cols.forEach(c=>{delete c.wall;delete c.s;delete c.off;});}clampOpenings();rooms=computeRooms();fillElevSelect();epSync();renderInspector();renderTakeoff();schedule3d();dirty();
   $('#undoBtn').disabled=!undoStack.length;$('#redoBtn').disabled=!redoStack.length;save();}
 function setView(v){$('#stage').dataset.view=v;['vPlan','vSplit','vElev','v3d'].forEach(id=>{const b=$('#'+id);b.setAttribute('aria-pressed',String(b.dataset.view===v));});
   requestAnimationFrame(()=>{dirty();draw3d();});}
@@ -3807,7 +3815,9 @@ function setSnap(v){snapOn=!!v;$('#snapToggle').setAttribute('aria-pressed',Stri
 function setEmptyDrag(v){emptyDrag=v;$('#dragBox').setAttribute('aria-pressed',String(v==='box'));$('#dragPan').setAttribute('aria-pressed',String(v==='pan'));}
 $('#snapToggle').onclick=()=>setSnap(!snapOn);$('#dragBox').onclick=()=>setEmptyDrag('box');$('#dragPan').onclick=()=>setEmptyDrag('pan');
 function setCut(c){cutaway=c;$('#cutOn').setAttribute('aria-pressed',String(c));$('#cutOff').setAttribute('aria-pressed',String(!c));build3d();}
-['vPlan','vSplit','vElev','v3d'].forEach(id=>$('#'+id).onclick=e=>setView(e.currentTarget.dataset.view));
+['vPlan','vSplit','vElev','v3d'].forEach(id=>$('#'+id).onclick=e=>{const v=e.currentTarget.dataset.view;if(eMode)epLeave(true);setView(v);});
+$('#vEplan').onclick=()=>{if(eMode)epLeave();else epEnter();};
+$('#epShowBtn').onclick=()=>{epShow=epShow==='hidden'?'faded':'hidden';try{localStorage.setItem('bm-epshow',epShow);}catch(e){}epSync();dirty();toast(epShow==='hidden'?'Electric plan hidden on the home plan.':'Electric plan shown faded on the home plan.');};
 document.querySelectorAll('#unitSeg button').forEach(b=>b.onclick=()=>{setUnits(b.dataset.units);toast('Units: '+b.textContent+'. The app will start with them next time too.');});
 $('#cutOn').onclick=()=>setCut(true);$('#cutOff').onclick=()=>setCut(false);
 $('#walkOn').onclick=()=>walkStart();$('#walkOff').onclick=()=>walkStop();
@@ -3821,9 +3831,20 @@ $('#lookMenu').addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Es
 $('#undoBtn').onclick=undo;$('#redoBtn').onclick=redo;$('#fitBtn').onclick=()=>{fit();frame3d();draw3d();};
 $('#projName').addEventListener('change',e=>{M.name=e.target.value;save();});
 document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>setTool(b.dataset.tool,b.dataset.kind||undefined));
+document.querySelectorAll('[data-tool="eplan"]').forEach(b=>b.onclick=()=>epSetKind(b.dataset.kind));
 $('#tDoor').onclick=e=>{if(document.getElementById('doorPick')){closeDoorPick();return;}openDoorPick(e.currentTarget);};
 // Tool and fixture icons drawn as plan symbols, the way they appear on the drawing.
 const ICONS={
+  ep_wire:'<path d="M3 18C8 18 8 6 13 6s5 8 8 8" stroke-width="2.4" stroke="#e03131"/>',
+  ep_dcwire:'<path d="M3 18C8 18 8 6 13 6s5 8 8 8" stroke-width="2.2" stroke-dasharray="3 2.2" stroke="#f08c00"/>',
+  ep_tube:'<path d="M3 16C9 16 9 8 15 8h6" stroke-width="6" stroke-opacity=".25"/><path d="M3 16C9 16 9 8 15 8h6"/>',
+  ep_jbox:'<rect x="6" y="6" width="12" height="12" rx="1"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',
+  ep_panel:'<rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M8 7h3M8 10.5h3M8 14h3M13 7h3M13 10.5h3M13 14h3M9 18h6"/>',
+  ep_meter:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 10h8"/><path d="M12 14l3-3" /><circle cx="12" cy="14" r="1" fill="currentColor"/>',
+  ep_pv:'<path d="M3 17 6 7h15l-3 10z"/><path d="M8 7l-2 10M13.5 7l-2.5 10M4.5 12h15"/>',
+  ep_dciso:'<rect x="5" y="4" width="14" height="16" rx="1.5"/><path d="M9 15l6-6"/><circle cx="9" cy="15" r="1" fill="currentColor"/><path d="M8 7h2M14 17h2"/>',
+  ep_inv:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M7 10c1.3-2 2.7-2 4 0s2.7 2 4 0"/><path d="M7 15h10" stroke-dasharray="2 1.6"/>',
+  ep_bat:'<rect x="3" y="7" width="16" height="10" rx="1.5"/><path d="M19 10.5h2v3h-2"/><path d="M7 12h4M9 10v4M14 12h3"/>',
   e_spot:'<circle cx="12" cy="12" r="6"/><path d="M8 8l8 8M16 8l-8 8"/>',
   e_strip:'<path d="M3 15 21 9" stroke-width="3" stroke-opacity=".35"/><path d="M3 15 21 9" stroke-dasharray="2.5 2"/><circle cx="3" cy="15" r="1.2" fill="currentColor"/><circle cx="21" cy="9" r="1.2" fill="currentColor"/>',
   e_chand:'<circle cx="12" cy="12" r="3"/><path d="M12 4v5M12 15v5M4 12h5M15 12h5M6.3 6.3l3.6 3.6M14.1 14.1l3.6 3.6M17.7 6.3l-3.6 3.6M9.9 14.1l-3.6 3.6"/>',
@@ -3881,6 +3902,364 @@ new MutationObserver(onTheme).observe(document.documentElement,{attributes:true,
 let narrow=window.innerWidth<900;
 window.addEventListener('resize',()=>{const n=window.innerWidth<900;if(n!==narrow){narrow=n;requestAnimationFrame(()=>{fit();frame3d();draw3d();});}dirty();draw3d();});
 function loop(){if(needDraw){needDraw=false;drawPlan();drawElev();}requestAnimationFrame(loop);}
+
+
+/* ============================== electric plan: wiring, conduits, breaker panel, solar ============================== */
+// A separate plan drawn over the home plan. The home plan, and the lights, switches and sockets placed on it, are
+// shown but locked; only the wiring parts below are edited here. In the home plan the wiring shows faded, or not at all.
+// Data lives in M.ep = {devs, wires, tubes, set} so it is saved, undone and opened with the project.
+var eMode=false,epKind=null,epDraw=null,epGhost=null,epSnapMark=null,epPrevView='plan';
+var epShow='faded';try{epShow=localStorage.getItem('bm-epshow')||'faded';}catch(e){}
+const EP0=Object.freeze({devs:Object.freeze([]),wires:Object.freeze([]),tubes:Object.freeze([]),set:Object.freeze({spare:10,std:'mm2'})});
+const epD=()=>M.ep||EP0;                       // read
+function epW(){if(!M.ep)M.ep={devs:[],wires:[],tubes:[],set:{spare:10,std:'mm2'}};const e=M.ep;['devs','wires','tubes'].forEach(k=>{if(!Array.isArray(e[k]))e[k]=[];});if(!e.set)e.set={spare:10,std:'mm2'};return e;}   // write (inside mutate)
+const epSet=()=>Object.assign({spare:10,std:'mm2'},epD().set||{});
+const epHas=()=>{const e=epD();return !!(e.devs.length||e.wires.length||e.tubes.length);};
+const epDev=id=>epD().devs.find(d=>d.id===id), epWire=id=>epD().wires.find(w=>w.id===id), epTube=id=>epD().tubes.find(t=>t.id===id);
+
+const EPDEV={
+  panel:{label:'Breaker panel',short:'DB',mount:'wall',h:1500,w:450},
+  meter:{label:'Grid supply / meter',short:'M',mount:'wall',h:1500,w:300},
+  jbox:{label:'Junction box',short:'JB',mount:'free',h:null},
+  pv:{label:'Solar panels',short:'PV',mount:'free',h:null},
+  dciso:{label:'DC isolator',short:'DCI',mount:'wall',h:1400,w:200},
+  inverter:{label:'Inverter',short:'INV',mount:'wall',h:1500,w:450},
+  battery:{label:'Battery',short:'BAT',mount:'wall',h:300,w:600}};
+const WIRE_SIZES={mm2:['0.75','1','1.5','2.5','4','6','10','16','25','35','50'],awg:['18','16','14','12','10','8','6','4','2','1/0','2/0']};
+const AWG_MM2={'18':0.82,'16':1.31,'14':2.08,'12':3.31,'10':5.26,'8':8.37,'6':13.3,'4':21.2,'2':33.6,'1/0':53.5,'2/0':67.4};
+const BRK_AMPS=[6,10,16,20,25,32,40,50,63,80,100,125];
+const BRK_TYPES=['MCB','RCBO','RCD','Solar','Isolator'];
+const CONNECTORS={none:'None',wago:'Wago lever',nut:'Wire nut',crimp:'Crimp / ferrule',term:'Terminal block',lug:'Cable lug',mc4:'MC4 (solar)'};
+const TUBE_TYPES=['PVC rigid','PVC flexible','Metal (EMT)','HDPE underground'];
+const TUBE_DIAS=[16,20,25,32,40,50,63];
+const ROUTES={ceiling:'In the ceiling',floor:'In the floor',ground:'Underground'};
+const wireMM2=w=>w.std==='awg'?(AWG_MM2[w.size]||2.5):(parseFloat(w.size)||2.5);
+const wireSizeTxt=w=>w.std==='awg'?w.size+' AWG':w.size+' mm²';
+function wireColor(w){const a=wireMM2(w);return a<=1?'#7b8a90':a<=1.6?'#1c7ed6':a<=2.6?'#e03131':a<=4.5?'#f08c00':a<=7?'#2f9e44':a<=11?'#ae3ec9':a<=17?'#0c8599':'#7a4b2a';}
+const wireWidth=w=>clamp(1.4+Math.sqrt(wireMM2(w))*1.1,1.6,7);
+
+// ---- geometry
+function epRefPos(r){if(!r)return null;if(r.k==='e'){const E=elecById(r.id);return E?elecPos(E):null;}const d=epDev(r.id);return d?epDevPos(d):null;}
+function epDevPos(d){if(EPDEV[d.type]&&EPDEV[d.type].mount==='wall'&&d.wall){const q=elecWallPos(d);return q?add(q.p,mul(q.n,epDevDepth(d)/2)):[d.x||0,d.y||0];}return [d.x,d.y];}
+const epDevDepth=d=>d.type==='battery'?220:d.type==='panel'||d.type==='inverter'?140:110;
+function epPts(o){const P=o.pts.map(p=>p.slice());const a=epRefPos(o.ea),b=epRefPos(o.eb);if(a)P[0]=a;if(b)P[P.length-1]=b;return P;}
+// smooth path through the points (Catmull-Rom), or straight segments
+function epPath(o){const P=epPts(o);if(!o.smooth||P.length<3)return P;const out=[P[0]];
+  for(let i=0;i<P.length-1;i++){const p0=P[Math.max(0,i-1)],p1=P[i],p2=P[i+1],p3=P[Math.min(P.length-1,i+2)];const n=Math.max(6,Math.min(24,Math.round(dist(p1,p2)/150)));
+    for(let k=1;k<=n;k++){const t=k/n,t2=t*t,t3=t2*t;out.push([0,1].map(j=>0.5*((2*p1[j])+(-p0[j]+p2[j])*t+(2*p0[j]-5*p1[j]+4*p2[j]-p3[j])*t2+(-p0[j]+3*p1[j]-3*p2[j]+p3[j])*t3)));}}return out;}
+const pathLen=P=>{let L=0;for(let i=1;i<P.length;i++)L+=dist(P[i-1],P[i]);return L;};
+function pathMid(P){const L=pathLen(P);let acc=0;for(let i=1;i<P.length;i++){const d=dist(P[i-1],P[i]);if(acc+d>=L/2){const t=(L/2-acc)/(d||1);return {p:add(P[i-1],mul(sub(P[i],P[i-1]),t)),d:norm(sub(P[i],P[i-1]))};}acc+=d;}return {p:P[0],d:[1,0]};}
+function distToPath(p,P){let bd=1e12,bi=0;for(let i=1;i<P.length;i++){const c=segClosest(p,P[i-1],P[i]);const d=dist(p,c.q);if(d<bd){bd=d;bi=i;}}return {d:bd,i:bi};}
+
+// ---- heights and lengths
+function epRefH(r,p){if(!r)return null;if(r.k==='e'){const E=elecById(r.id);if(!E)return null;const D=ELEC[E.type];if(D.mount==='ceiling')return ceilAt(p);return E.h!=null?E.h:(D.h||ceilAt(p));}
+  const d=epDev(r.id);if(!d)return null;if(d.h!=null)return d.h;const D=EPDEV[d.type];return D.h!=null?D.h:ceilAt(p);}
+function routeH(w,p){return w.route==='floor'?0:w.route==='ground'?-600:ceilAt(p);}
+function wireLens(w){const P=epPath(w),plan=pathLen(P);let drops=0;const Q=epPts(w);
+  [[w.ea,Q[0]],[w.eb,Q[Q.length-1]]].forEach(([r,p])=>{const h=epRefH(r,p);if(h!=null)drops+=Math.abs(routeH(w,p)-h);});
+  const sp=epSet().spare/100;return {plan,drops,total:(plan+drops)*(1+sp)};}
+function tubeLen(t){return pathLen(epPath(t))*(1+epSet().spare/100);}
+// outer diameter of a cable (mm), roughly: insulated cores laid up plus a sheath
+function cableOD(w){const d1=2*Math.sqrt(wireMM2(w)/Math.PI)+1.6,n=clamp(w.cores||1,1,5);return d1*[1,1,2,2.16,2.42,2.7][n]+(n>1?2:0);}
+function tubeFill(t){const wa=(t.wires||[]).map(epWire).filter(Boolean).reduce((a,w)=>a+Math.PI/4*cableOD(w)**2,0);const di=t.dia*0.85;return wa/(Math.PI/4*di*di);}
+const refName=r=>{if(!r)return '—';if(r.k==='e'){const E=elecById(r.id);return E?(E.label?E.label+' ':'')+ELEC[E.type].label:'—';}const d=epDev(r.id);return d?(d.name||EPDEV[d.type].label):'—';};
+const nextName=(arr,pre)=>{let n=arr.length+1;const has=new Set(arr.map(x=>x.name));while(has.has(pre+n))n++;return pre+n;};
+
+// ---- availability, entering and leaving
+function epAllowed(){return M.walls.length>=4&&(M.elec||[]).length>=1;}
+function epSync(){const b=$('#vEplan');if(!b)return;const ok=epAllowed();b.setAttribute('aria-disabled',String(!ok));b.classList.toggle('lockd',!ok);
+  b.title=ok?'Electric plan: wires, conduits, breaker panel and solar, drawn over the home plan':'Electric plan: draw at least 4 walls and add at least 1 light, switch or socket first';
+  b.setAttribute('aria-pressed',String(eMode));if(eMode&&!ok)epLeave(true);const sb=$('#epShowBtn');if(sb){sb.hidden=!epHas()||eMode;sb.setAttribute('aria-pressed',String(epShow!=='hidden'));}}
+function epEnter(){if(!epAllowed()){toast('Draw at least 4 walls and add at least one light, switch or socket with the Electrical tools first.');return;}
+  if(eMode)return;eMode=true;const v=$('#stage').dataset.view;epPrevView=v==='eplan'?'plan':v;
+  setView('plan');$('#app').classList.add('emode');eMode=true;setTool('select');sel=null;epKind=null;epDraw=null;
+  ['vPlan','vSplit','vElev','v3d'].forEach(id=>$('#'+id).setAttribute('aria-pressed','false'));
+  if(M.ep)M.ep.wires.concat(M.ep.tubes).forEach(o=>{const Q=epPts(o);o.pts[0]=Q[0];o.pts[o.pts.length-1]=Q[Q.length-1];});
+  epSync();renderInspector();renderTakeoff();dirty();
+  if(!epHas())toast('Electric plan: the home plan is locked. Place the breaker panel, then draw wires with the Electric plan tools, starting at a light, switch, socket or the panel.');}
+function epLeave(quiet){if(!eMode)return;eMode=false;epDraw=null;epKind=null;$('#app').classList.remove('emode');if(tool==='eplan')setTool('select');sel=null;epSync();
+  setView(epPrevView||'plan');renderInspector();renderTakeoff();dirty();}
+function epSetKind(k){if(!eMode)return;epKind=k;epDraw=null;epGhost=null;setTool(k?'eplan':'select',k||undefined);}
+
+// ---- drawing
+const epPx=()=>clamp(view.s*190,8,16);
+function epDrawDev(d,on,faded){const D=EPDEV[d.type];if(!D)return;ctx.save();if(faded)ctx.globalAlpha=0.32;const s=epPx();
+  const font=w=>(w||600)+' '+Math.round(s*0.62)+'px '+getComputedStyle(document.body).fontFamily;
+  if(d.type==='pv'){const n=Math.max(1,d.count||1),cols=Math.max(1,d.cols||Math.ceil(n/2)),rows=Math.ceil(n/cols),pw=1134,ph=1722,W=cols*pw,H=rows*ph;
+    ctx.translate(...toS([d.x,d.y]));ctx.rotate((d.r||0)*Math.PI/180);const k=view.s;ctx.lineWidth=1.2;
+    for(let i=0;i<n;i++){const cx=(i%cols)*pw-W/2,cy=Math.floor(i/cols)*ph-H/2;ctx.fillStyle='#1d3d6e';ctx.strokeStyle='#9fb4d6';ctx.fillRect(cx*k+1,cy*k+1,pw*k-2,ph*k-2);ctx.strokeRect(cx*k+1,cy*k+1,pw*k-2,ph*k-2);
+      if(pw*k>14){ctx.beginPath();for(let j=1;j<3;j++){ctx.moveTo((cx+pw*j/3)*k,cy*k+2);ctx.lineTo((cx+pw*j/3)*k,(cy+ph)*k-2);}ctx.moveTo(cx*k+2,(cy+ph/2)*k);ctx.lineTo((cx+pw)*k-2,(cy+ph/2)*k);ctx.strokeStyle='rgba(159,180,214,.6)';ctx.stroke();}}
+    if(on){ctx.strokeStyle=C.accent;ctx.lineWidth=2;ctx.setLineDash([5,3]);ctx.strokeRect(-W/2*k-4,-H/2*k-4,W*k+8,H*k+8);ctx.setLineDash([]);}
+    ctx.restore();if(!faded)txt((d.name||'PV')+' · '+n+' × '+(d.watt||450)+' W',add(toS([d.x,d.y]),[0,0]),{weight:'600',size:11,color:'#fff',halo:'#1d3d6e'});return;}
+  const q=toS(epDevPos(d));let ang=0;if(D.mount==='wall'&&d.wall){const P=elecWallPos(d);if(P)ang=Math.atan2(P.n[1],P.n[0])+Math.PI/2;}
+  ctx.translate(q[0],q[1]);ctx.rotate(ang);
+  if(d.type==='jbox'){const r=s*0.55;ctx.fillStyle=C.paper;ctx.strokeStyle='#495057';ctx.lineWidth=1.6;ctx.fillRect(-r,-r,2*r,2*r);ctx.strokeRect(-r,-r,2*r,2*r);ctx.beginPath();ctx.arc(0,0,r*0.35,0,Math.PI*2);ctx.fillStyle='#495057';ctx.fill();}
+  else{const w=Math.max(s*2.2,(D.w||300)*view.s),h=Math.max(s*1.1,epDevDepth(d)*view.s);
+    const fill={panel:'#343a40',meter:'#495057',dciso:'#c92a2a',inverter:'#5f3dc4',battery:'#2b8a3e'}[d.type]||'#495057';
+    ctx.fillStyle=fill;ctx.strokeStyle=on?C.accent:'#212529';ctx.lineWidth=on?2.2:1.2;ctx.fillRect(-w/2,-h/2,w,h);ctx.strokeRect(-w/2,-h/2,w,h);
+    ctx.rotate(-ang);ctx.fillStyle='#fff';ctx.font=font(700);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(d.type==='meter'?'kWh':d.type==='inverter'?'~ INV':D.short,0,0);ctx.rotate(ang);}
+  ctx.restore();
+  if(on){ctx.save();ctx.strokeStyle=C.accent;ctx.lineWidth=2;ctx.setLineDash([3,2]);ctx.beginPath();ctx.arc(q[0],q[1],s*1.6,0,Math.PI*2);ctx.stroke();ctx.restore();}
+  if(!faded){let lab=d.name||'';if(d.type==='panel')lab+=' · '+(d.main||63)+' A · '+(d.brk||[]).length+' breakers';if(d.type==='inverter')lab+=' · '+(d.kw||5)+' kW';if(d.type==='battery')lab+=' · '+(d.kwh||10)+' kWh';if(d.type==='dciso')lab+=' · '+(d.amps||32)+' A DC';
+    if(lab)txt(lab,[q[0],q[1]+s*1.9],{weight:'600',size:10.5,color:C.ink,halo:C.paper});}}
+function epStrokePath(P){ctx.beginPath();P.forEach((p,i)=>{const s=toS(p);i?ctx.lineTo(s[0],s[1]):ctx.moveTo(s[0],s[1]);});}
+function epDrawTube(t,on,faded){const P=epPath(t);if(P.length<2)return;ctx.save();if(faded)ctx.globalAlpha=0.28;const wpx=Math.max(7,t.dia*view.s);
+  ctx.lineCap='round';ctx.lineJoin='round';epStrokePath(P);ctx.strokeStyle=on?C.accent:'#868e96';ctx.lineWidth=wpx+2;ctx.stroke();
+  epStrokePath(P);ctx.strokeStyle=t.type&&t.type.startsWith('HDPE')?'#ffe8cc':t.type&&t.type.startsWith('Metal')?'#dee2e6':'#e9ecef';ctx.lineWidth=wpx;ctx.stroke();ctx.restore();
+  if(!faded){const m=pathMid(P),fl=tubeFill(t);const q=toS(add(m.p,mul(perp(m.d),Math.max(t.dia,22/view.s))));
+    txt((t.name||'')+' Ø'+t.dia+' · '+(t.wires||[]).length+((t.wires||[]).length===1?' wire · ':' wires · ')+fmtRun(tubeLen(t))+' '+runU()+(fl>0?' · '+Math.round(fl*100)+'%':''),q,{size:10,weight:'500',color:fl>0.4?C.danger:'#495057',halo:C.paper});}
+  if(on)epHandles(t);}
+function epDrawWire(w,on,faded){const P=epPath(w);if(P.length<2)return;ctx.save();if(faded)ctx.globalAlpha=0.3;ctx.lineCap='round';ctx.lineJoin='round';
+  if(on){epStrokePath(P);ctx.strokeStyle=C['accent-weak'];ctx.lineWidth=wireWidth(w)+8;ctx.stroke();}
+  epStrokePath(P);ctx.strokeStyle=wireColor(w);ctx.lineWidth=wireWidth(w);if(w.kind==='dc')ctx.setLineDash([9,5]);ctx.stroke();ctx.setLineDash([]);
+  // connectors at the ends
+  const Q=epPts(w);[[Q[0],w.ca],[Q[Q.length-1],w.cb]].forEach(([p,c])=>{const s=toS(p);ctx.fillStyle=wireColor(w);ctx.strokeStyle=C.paper;ctx.lineWidth=1;
+    if(!c||c==='none'){ctx.beginPath();ctx.arc(s[0],s[1],2.6,0,Math.PI*2);ctx.fill();return;}
+    ctx.beginPath();if(c==='wago'||c==='term')ctx.rect(s[0]-4,s[1]-4,8,8);else if(c==='nut'){ctx.moveTo(s[0],s[1]-5);ctx.lineTo(s[0]+5,s[1]+4);ctx.lineTo(s[0]-5,s[1]+4);ctx.closePath();}
+    else if(c==='mc4'||c==='lug'){ctx.moveTo(s[0],s[1]-5);ctx.lineTo(s[0]+5,s[1]);ctx.lineTo(s[0],s[1]+5);ctx.lineTo(s[0]-5,s[1]);ctx.closePath();}else ctx.arc(s[0],s[1],4,0,Math.PI*2);ctx.fill();ctx.stroke();});
+  ctx.restore();
+  if(!faded){const m=pathMid(P),L=wireLens(w);const n=perp(m.d);const q=toS(add(m.p,mul(n,16/view.s)));let a=Math.atan2(m.d[1],m.d[0]);if(a>Math.PI/2)a-=Math.PI;if(a<-Math.PI/2)a+=Math.PI;
+    txt((w.name?w.name+' ':'')+(w.kind==='dc'?'DC':'AC')+' '+wireSizeTxt(w)+' '+(w.cores||1)+'C · '+fmtRun(L.total)+' '+runU(),q,{size:10,weight:'600',color:wireColor(w),halo:C.paper,rot:a});}
+  if(on)epHandles(w);}
+function epHandles(o){const Q=epPts(o);Q.forEach((p,i)=>{const s=toS(p),end=i===0||i===Q.length-1;ctx.save();ctx.fillStyle=end?C.paper:C.accent;ctx.strokeStyle=C.accent;ctx.lineWidth=1.6;
+  const r=ptrTouch?6:4.5;ctx.beginPath();if(end)ctx.arc(s[0],s[1],r+1,0,Math.PI*2);else ctx.rect(s[0]-r,s[1]-r,2*r,2*r);ctx.fill();ctx.stroke();ctx.restore();});}
+function drawEplan(){if(!M)return;const E=epD();
+  if(eMode){const W=planCv.width/pxr(),H=planCv.height/pxr();ctx.save();ctx.globalAlpha=0.62;ctx.fillStyle=C.paper;ctx.fillRect(-10,-10,(EXP?EXP.w:W)+20,(EXP?EXP.h:H)+20);ctx.restore();
+    (M.elec||[]).forEach(x=>drawElecItem(x,false,false));}
+  else{if(epShow==='hidden'||!epHas()||EXP&&!eMode)return;}
+  const faded=!eMode,s=eMode&&sel&&sel.kind==='ep'?sel:null;
+  E.tubes.forEach(t=>epDrawTube(t,s&&s.id===t.id,faded));
+  E.devs.filter(d=>d.type==='pv').forEach(d=>epDrawDev(d,s&&s.id===d.id,faded));
+  E.wires.forEach(w=>epDrawWire(w,s&&s.id===w.id,faded));
+  E.devs.filter(d=>d.type!=='pv').forEach(d=>epDrawDev(d,s&&s.id===d.id,faded));
+  if(eMode&&!EXP)epDrawTool();}
+function epDrawTool(){if(tool!=='eplan')return;
+  if(epDraw){const o=Object.assign({},epDraw,{pts:epDraw.pts.concat([epGhost&&epGhost.p||epDraw.pts[epDraw.pts.length-1]]),eb:epGhost&&epGhost.ref||null});
+    if(epKind==='tube')epDrawTube(o,false,false);else epDrawWire(o,false,false);}
+  else if(epGhost&&epGhost.dev){epDrawDev(epGhost.dev,false,false);}
+  if(epGhost&&epGhost.ref){const s=toS(epGhost.p);ctx.save();ctx.strokeStyle=C.snap;ctx.lineWidth=2;ctx.beginPath();ctx.arc(s[0],s[1],11,0,Math.PI*2);ctx.stroke();ctx.restore();}
+  else if(epGhost&&epGhost.sn)drawSnapMark(epGhost.sn);}
+
+// ---- snapping wire ends to lights, switches, sockets and wiring parts
+function epSnapRef(p){const tol=(ptrTouch?22:14)/view.s;let best=null,bd=tol;
+  (M.elec||[]).forEach(E=>{const q=elecPos(E);if(q&&dist(p,q)<bd){bd=dist(p,q);best={ref:{k:'e',id:E.id},p:q};}});
+  epD().devs.forEach(d=>{if(d.type==='pv'){const n=Math.max(1,d.count||1),cols=Math.max(1,d.cols||Math.ceil(n/2)),rows=Math.ceil(n/cols);const hw=cols*1134/2,hh=rows*1722/2;const l=rotV(sub(p,[d.x,d.y]),-(d.r||0));if(Math.abs(l[0])<hw&&Math.abs(l[1])<hh&&!best)best={ref:{k:'d',id:d.id},p:[d.x,d.y]};return;}
+    const q=epDevPos(d);if(dist(p,q)<bd*1.4){bd=dist(p,q);best={ref:{k:'d',id:d.id},p:q};}});return best;}
+function epPoint(p,from){const r=epSnapRef(p);if(r)return r;const sn=snapPoint(p,from);return {p:sn.p,sn};}
+
+// ---- tools
+function epToolMove(p){if(!epKind)return;
+  if(epKind==='wire_ac'||epKind==='wire_dc'||epKind==='tube'){epGhost=epKind==='tube'?(()=>{const sn=snapPoint(p,epDraw&&epDraw.pts[epDraw.pts.length-1]);return {p:sn.p,sn};})():epPoint(p,epDraw&&epDraw.pts[epDraw.pts.length-1]);dirty();return;}
+  const D=EPDEV[epKind];if(!D)return;
+  if(D.mount==='wall'){const sl=wallSlot(p);epGhost=sl?{dev:Object.assign(epNewDev(epKind),sl)}:null;dirty();return;}
+  const sn=snapPoint(p,null);epGhost={dev:Object.assign(epNewDev(epKind),{x:sn.p[0],y:sn.p[1]}),sn};dirty();}
+function epNewDev(t){const d={id:'ghost',type:t};const E=epD();
+  if(t==='panel')Object.assign(d,{name:nextName(E.devs.filter(x=>x.type==='panel'),'DB'),main:63,poles:2,feedStd:epSet().std,feedSize:epSet().std==='awg'?'4':'16',feedLen:5000,brk:[]});
+  if(t==='jbox')d.name=nextName(E.devs.filter(x=>x.type==='jbox'),'JB');
+  if(t==='meter')d.name='Grid';
+  if(t==='pv')Object.assign(d,{name:nextName(E.devs.filter(x=>x.type==='pv'),'PV'),count:8,cols:4,watt:450,r:0});
+  if(t==='dciso')Object.assign(d,{name:nextName(E.devs.filter(x=>x.type==='dciso'),'DCI'),amps:32,volts:1000});
+  if(t==='inverter')Object.assign(d,{name:nextName(E.devs.filter(x=>x.type==='inverter'),'INV'),kw:5});
+  if(t==='battery')Object.assign(d,{name:nextName(E.devs.filter(x=>x.type==='battery'),'BAT'),kwh:10,volts:48});
+  return d;}
+function epToolClick(p){if(!epKind)return;
+  if(epKind==='wire_ac'||epKind==='wire_dc'||epKind==='tube'){const isT=epKind==='tube';const last=epDraw&&epDraw.pts[epDraw.pts.length-1];
+    const r=isT?(()=>{const sn=snapPoint(p,last);return {p:sn.p};})():epPoint(p,last);
+    if(!epDraw){const st=epSet(),dc=epKind==='wire_dc';
+      epDraw=isT?{type:'tube',pts:[r.p.slice()],smooth:true,dia:20,tt:'PVC flexible'}
+        :{type:'wire',pts:[r.p.slice()],ea:r.ref||null,smooth:true,kind:dc?'dc':'ac',std:st.std,size:st.std==='awg'?(dc?'10':'12'):(dc?'4':'2.5'),cores:dc?2:3,route:'ceiling'};
+      renderInspector();dirty();return;}
+    if(dist(r.p,last)<30){epFinish();return;}
+    epDraw.pts.push(r.p.slice());if(r.ref&&!isT){epDraw.eb=r.ref;epFinish();return;}renderInspector();dirty();return;}
+  const D=EPDEV[epKind];let at;
+  if(D.mount==='wall'){const sl=wallSlot(p);if(!sl){toast(D.label+': click close to a wall, where it is mounted.');return;}at=sl;}else{const sn=snapPoint(p,null);at={x:sn.p[0],y:sn.p[1]};}
+  const d=Object.assign(epNewDev(epKind),at,{id:nid('x')});mutate(()=>epW().devs.push(d));if(d.type!=='jbox'){epSetKind(null);sel={kind:'ep',t:'dev',id:d.id};}renderInspector();renderTakeoff();dirty();}
+function epFinish(){const o=epDraw;epDraw=null;epGhost=null;if(!o||o.pts.length<2){renderInspector();dirty();return;}
+  const E=epD();let made;
+  if(o.type==='tube'){made={id:nid('z'),name:nextName(E.tubes,'C'),pts:o.pts,smooth:o.smooth,dia:o.dia,type:o.tt,wires:[]};
+    // wires that run along this conduit go in it
+    made.wires=E.wires.filter(w=>{const P=epPath(w);const T=epPath(made);let near=0,n=0;for(let i=0;i<P.length;i+=1){n++;if(distToPath(P[i],T).d<Math.max(150,made.dia*4))near++;}return n&&near/n>0.5;}).map(w=>w.id);
+    mutate(()=>epW().tubes.push(made));}
+  else{made={id:nid('y'),name:nextName(E.wires,'W'),pts:o.pts,ea:o.ea,eb:o.eb||null,smooth:o.smooth,kind:o.kind,std:o.std,size:o.size,cores:o.cores,route:o.route,ca:'none',cb:'none'};
+    [['ea','ca'],['eb','cb']].forEach(([r,c])=>{const R=made[r];if(R&&R.k==='d'){const d=epDev(R.id);if(d&&d.type==='pv')made[c]='mc4';if(d&&d.type==='jbox')made[c]='wago';if(d&&d.type==='panel')made[c]='term';}});
+    const pn=[made.ea,made.eb].map(r=>r&&r.k==='d'&&epDev(r.id)).find(d=>d&&d.type==='panel');if(pn&&(pn.brk||[]).length)made.circuit=pn.brk[0].id;
+    mutate(()=>epW().wires.push(made));}
+  sel={kind:'ep',t:o.type==='tube'?'tube':'wire',id:made.id};renderInspector();dirty();}
+
+// ---- selecting and dragging (only wiring parts can be picked in the electric plan)
+function epHit(p){const tol=(ptrTouch?16:9)/view.s;const E=epD();
+  if(sel&&sel.kind==='ep'&&(sel.t==='wire'||sel.t==='tube')){const o=sel.t==='wire'?epWire(sel.id):epTube(sel.id);if(o){const Q=epPts(o);for(let i=0;i<Q.length;i++)if(dist(p,Q[i])<tol*1.2)return {t:sel.t,id:o.id,pt:i};}}
+  for(const d of E.devs){if(d.type==='pv')continue;if(dist(p,epDevPos(d))<Math.max(tol*1.5,epPx()*1.2/view.s))return {t:'dev',id:d.id};}
+  let best=null,bd=tol;E.wires.forEach(w=>{const r=distToPath(p,epPath(w));const dd=r.d-wireWidth(w)/2/view.s;if(dd<bd){bd=dd;best={t:'wire',id:w.id,seg:r.i};}});if(best)return best;
+  E.tubes.forEach(t=>{const r=distToPath(p,epPath(t));const dd=r.d-t.dia/2;if(dd<bd){bd=dd;best={t:'tube',id:t.id,seg:r.i};}});if(best)return best;
+  for(const d of E.devs){if(d.type!=='pv')continue;const n=Math.max(1,d.count||1),cols=Math.max(1,d.cols||Math.ceil(n/2)),rows=Math.ceil(n/cols);const l=rotV(sub(p,[d.x,d.y]),-(d.r||0));if(Math.abs(l[0])<cols*567&&Math.abs(l[1])<rows*861)return {t:'dev',id:d.id};}
+  return null;}
+function epPointerDown(p,e,sp){const h=epHit(p);
+  if(!h){if(sel&&sel.kind==='ep'){sel=null;renderInspector();}pan={sx:sp[0],sy:sp[1],ox:view.ox,oy:view.oy,click:false};planCv.setPointerCapture(e.pointerId);dirty();return;}
+  sel={kind:'ep',t:h.t,id:h.id};renderInspector();
+  drag={kind:'ep',t:h.t,id:h.id,pt:h.pt,seg:h.seg,p0:p,snap0:snapshot(),moved:false};
+  const o=h.t==='wire'?epWire(h.id):h.t==='tube'?epTube(h.id):epDev(h.id);drag.o0=JSON.parse(JSON.stringify(o));
+  if(h.t!=='dev'&&h.pt==null){drag.pts0=epPts(o);}
+  planCv.setPointerCapture(e.pointerId);dirty();}
+function epDragMove(drag,p){const dv=sub(p,drag.p0);
+  if(drag.t==='dev'){const d=epDev(drag.id);if(!d)return;const D=EPDEV[d.type];
+    if(D.mount==='wall'&&drag.o0.wall){const sl=wallSlot(p,60);if(sl){d.wall=sl.wall;d.s=sl.s;d.side=sl.side;}drag.snap={kind:'on wall'};return;}
+    const sn=snapPoint(add([drag.o0.x,drag.o0.y],dv),null);d.x=sn.p[0];d.y=sn.p[1];drag.snap={kind:'move'};return;}
+  const o=drag.t==='wire'?epWire(drag.id):epTube(drag.id);if(!o)return;const last=o.pts.length-1;
+  if(drag.pt!=null){const i=drag.pt,end=i===0||i===last;
+    if(end&&drag.t==='wire'){const r=epPoint(p,o.pts[i===0?1:last-1]);o.pts[i]=r.p.slice();o[i===0?'ea':'eb']=r.ref||null;drag.snap={kind:r.ref?'to '+refName(r.ref):'free end'};return;}
+    const sn=snapPoint(p,null);o.pts[i]=sn.p.slice();if(end)o[i===0?'ea':'eb']=null;drag.snap={kind:'bend point'};return;}
+  // dragging the line itself pulls a new bend point out of it
+  if(drag.seg!=null){const P=drag.pts0;const Q=epPts(o);let si=1,bd=1e12;for(let i=1;i<Q.length;i++){const c=segClosest(drag.p0,Q[i-1],Q[i]);const d=dist(drag.p0,c.q);if(d<bd){bd=d;si=i;}}
+    o.pts.splice(si,0,p.slice());drag.pt=si;drag.seg=null;drag.snap={kind:'new bend point'};}}
+function epDbl(p){const h=epHit(p);if(!h||h.t==='dev')return;const o=h.t==='wire'?epWire(h.id):epTube(h.id);if(!o)return;
+  if(h.pt!=null){if(h.pt===0||h.pt===o.pts.length-1)return;mutate(()=>o.pts.splice(h.pt,1));toast('Bend point removed.');renderInspector();return;}
+  const Q=epPts(o);let si=1,bd=1e12;for(let i=1;i<Q.length;i++){const c=segClosest(p,Q[i-1],Q[i]);const d=dist(p,c.q);if(d<bd){bd=d;si=i;}}
+  mutate(()=>o.pts.splice(si,0,p.slice()));sel={kind:'ep',t:h.t,id:o.id};renderInspector();toast('Bend point added: drag it to shape the run. Double-click it to remove it.');}
+function epDelete(){if(!sel||sel.kind!=='ep')return;const s=sel;mutate(()=>{const E=epW();
+  if(s.t==='wire'){E.wires=E.wires.filter(w=>w.id!==s.id);E.tubes.forEach(t=>t.wires=(t.wires||[]).filter(id=>id!==s.id));}
+  if(s.t==='tube')E.tubes=E.tubes.filter(t=>t.id!==s.id);
+  if(s.t==='dev'){E.devs=E.devs.filter(d=>d.id!==s.id);E.wires.forEach(w=>{['ea','eb'].forEach(k=>{if(w[k]&&w[k].k==='d'&&w[k].id===s.id)w[k]=null;});});}});
+  sel=null;renderInspector();dirty();}
+// keys in the electric plan: Enter / double-click finishes a run, Esc cancels, Delete removes; home-plan shortcuts are off
+function epKey(e,k){if(!eMode)return false;const tag=(e.target.tagName||'').toLowerCase();if(tag==='input'||tag==='select'||tag==='textarea')return false;
+  if(epDraw){if(k==='enter'){e.preventDefault();epFinish();return true;}if(k==='escape'){epDraw=null;epGhost=null;renderInspector();dirty();return true;}
+    if(k==='backspace'||k==='delete'){e.preventDefault();epDraw.pts.pop();if(!epDraw.pts.length)epDraw=null;renderInspector();dirty();return true;}}
+  if(k==='escape'){if(tool==='eplan')epSetKind(null);else{sel=null;renderInspector();dirty();}return true;}
+  if((k==='delete'||k==='backspace')&&sel&&sel.kind==='ep'){e.preventDefault();epDelete();return true;}
+  if(k==='f'||k==='s'||e.key==='+'||e.key==='='||e.key==='-'||e.key==='_'||k===' ')return false;
+  if(/^[a-z]$/.test(k)||k.startsWith('arrow')||k==='delete'||k==='backspace')return true;return false;}
+
+function epHint(t,k){if(t==='eplan'){if(k==='wire_ac'||k==='wire_dc'||k==='tube')return 'Click to start, click to add bend points; end on a part, or double-click / <kbd>Enter</kbd>. <kbd>Backspace</kbd> removes the last point, <kbd>Esc</kbd> cancels.';return 'Click to place it. <kbd>Esc</kbd> goes back to the Pointer.';}
+  return 'Electric plan: click a wire, conduit or part to edit it. Drag points to reshape a run; double-click a wire to add a bend point. <kbd>Del</kbd> deletes. The home plan is locked.';}
+// ---- side panel
+const opt=(v,cur,lab)=>`<option value="${esc(String(v))}"${String(v)===String(cur)?' selected':''}>${esc(lab!=null?lab:String(v))}</option>`;
+function epToolPanel(){const names={wire_ac:'AC wire',wire_dc:'DC wire',tube:'Conduit'};
+  if(names[epKind]){const how=epKind==='tube'?'Click along the route of the conduit; double-click or press Enter to finish. Wires that run along it are put in it; change that in its panel.'
+    :epDraw?'Click to add bend points. Click on a light, switch, socket, junction box or panel to end the wire there, or double-click / Enter to end it anywhere. Backspace removes the last point, Esc cancels.'
+    :'Click where the wire starts: on a light, switch, socket, junction box or the breaker panel (they light up orange), or anywhere.';
+    return `<p class="h">New ${names[epKind].toLowerCase()}</p><p class="tip">${how}</p><p class="tip">The run is drawn as a smooth curve through your points; switch it to straight lines in its panel. Size, cores and route are set in its panel afterwards.</p>`;}
+  const D=EPDEV[epKind];return D?`<p class="h">New ${D.label.toLowerCase()}</p><p class="tip">${D.mount==='wall'?'Click on a wall face where it is mounted.':'Click where it goes.'} Its settings are in its panel afterwards.</p>`:'';}
+function epInspectorHTML(){
+  if(tool==='eplan')return epToolPanel();
+  if(!sel||sel.kind!=='ep')return `<p class="h">Electric plan</p><p class="empty">The home plan and its lights, switches and sockets are locked here. Pick a wiring tool on the left, or select a wire, conduit or part to edit it. Double-click a wire to add a bend point.</p>
+    <div class="kv"><label>Wire sizes</label><div class="seg segsm" role="group" aria-label="Wire size standard"><button data-epstd="mm2" aria-pressed="${epSet().std==='mm2'}">mm²</button><button data-epstd="awg" aria-pressed="${epSet().std==='awg'}">AWG</button></div></div>
+    <p class="tip">Back to the home plan: press <b>Plan</b> (or any view) above.</p>`;
+  const s=sel;
+  if(s.t==='wire'){const w=epWire(s.id);if(!w)return '';const L=wireLens(w);const tubes=epD().tubes.filter(t=>(t.wires||[]).includes(w.id));
+    const panels=[w.ea,w.eb].map(r=>r&&r.k==='d'&&epDev(r.id)).filter(d=>d&&d.type==='panel');const brks=(panels.length?panels:epD().devs.filter(d=>d.type==='panel')).flatMap(p=>(p.brk||[]).map(b=>({p,b})));
+    return `<div class="selname">Wire ${esc(w.name||'')}<span class="selbtns"><button class="btn" id="epDel">Delete</button></span></div><div class="kv">
+      <label for="epName">Name</label><input id="epName" data-type="text" style="font-family:var(--f-body)" value="${esc(w.name||'')}">
+      <label>Current</label><div class="seg segsm" role="group" aria-label="AC or DC"><button data-epkind="ac" aria-pressed="${w.kind!=='dc'}">AC</button><button data-epkind="dc" aria-pressed="${w.kind==='dc'}">DC</button></div>
+      <label>Size in</label><div class="seg segsm" role="group" aria-label="Size standard"><button data-wstd="mm2" aria-pressed="${w.std!=='awg'}">mm²</button><button data-wstd="awg" aria-pressed="${w.std==='awg'}">AWG</button></div>
+      <label for="epSize">Size</label><select id="epSize">${WIRE_SIZES[w.std==='awg'?'awg':'mm2'].map(v=>opt(v,w.size,v+(w.std==='awg'?' AWG':' mm²'))).join('')}</select>
+      <label for="epCores">Cores</label><select id="epCores">${[1,2,3,4,5].map(n=>opt(n,w.cores||1,n+(n===1?' core (single)':' cores'))).join('')}</select>
+      <label for="epRoute">Runs</label><select id="epRoute">${Object.keys(ROUTES).map(k=>opt(k,w.route||'ceiling',ROUTES[k])).join('')}</select>
+      <label>From</label><span class="ro" style="font-family:var(--f-body)">${esc(refName(w.ea))}</span>
+      <label for="epCa">Connector</label><select id="epCa">${Object.keys(CONNECTORS).map(k=>opt(k,w.ca||'none',CONNECTORS[k])).join('')}</select>
+      <label>To</label><span class="ro" style="font-family:var(--f-body)">${esc(refName(w.eb))}</span>
+      <label for="epCb">Connector</label><select id="epCb">${Object.keys(CONNECTORS).map(k=>opt(k,w.cb||'none',CONNECTORS[k])).join('')}</select>
+      ${brks.length?`<label for="epCirc">Circuit</label><select id="epCirc">${opt('','',' — none —')}${brks.map(({p,b})=>opt(b.id,w.circuit||'',(p.name||'DB')+' · '+(b.name||'Breaker')+' '+b.amps+' A')).join('')}</select>`:''}
+      <label>Shape</label><div class="seg segsm" role="group" aria-label="Curved or straight"><button data-smooth="1" aria-pressed="${!!w.smooth}">Curved</button><button data-smooth="0" aria-pressed="${!w.smooth}">Straight</button></div>
+      <label>On the plan</label><span class="ro">${fmtLen(L.plan,true)}</span>
+      <label>Up / down</label><span class="ro">${fmtLen(L.drops,true)}</span>
+      <label>With ${epSet().spare}% spare</label><span class="ro big">${fmtLen(L.total,true)}</span>
+      <label>In conduit</label><span class="ro" style="font-family:var(--f-body)">${tubes.length?tubes.map(t=>esc(t.name)+' Ø'+t.dia).join(', '):'—'}</span></div>
+      <p class="tip">Drag a point to move it, drag the line to pull out a new bend point, double-click a bend point to remove it. Drag an end onto a light, switch, socket or panel to connect it. "Up / down" is the run from the ceiling or floor to each end's height.</p>`;}
+  if(s.t==='tube'){const t=epTube(s.id);if(!t)return '';const fl=tubeFill(t);
+    return `<div class="selname">Conduit ${esc(t.name||'')}<span class="selbtns"><button class="btn" id="epDel">Delete</button></span></div><div class="kv">
+      <label for="epName">Name</label><input id="epName" data-type="text" style="font-family:var(--f-body)" value="${esc(t.name||'')}">
+      <label for="epType">Type</label><select id="epType">${TUBE_TYPES.map(v=>opt(v,t.type)).join('')}</select>
+      <label for="epDia">Diameter</label><select id="epDia">${TUBE_DIAS.map(v=>opt(v,t.dia,v+' mm')).join('')}</select>
+      <label>Length</label><span class="ro big">${fmtLen(tubeLen(t),true)}</span>
+      <label>Fill</label><span class="ro" style="color:${fl>0.4?'var(--danger)':'inherit'}">${Math.round(fl*100)}%${fl>0.4?' (over 40%: use a bigger conduit)':''}</span>
+      <label>Shape</label><div class="seg segsm" role="group" aria-label="Curved or straight"><button data-smooth="1" aria-pressed="${!!t.smooth}">Curved</button><button data-smooth="0" aria-pressed="${!t.smooth}">Straight</button></div></div>
+      <p class="h" style="margin-top:10px">Wires inside</p><div class="epchk">${epD().wires.length?epD().wires.map(w=>`<label><input type="checkbox" data-tw="${w.id}"${(t.wires||[]).includes(w.id)?' checked':''}> <span style="color:${wireColor(w)};font-weight:600">${esc(w.name||'')}</span> ${w.kind==='dc'?'DC':'AC'} ${wireSizeTxt(w)} ${w.cores||1}C</label>`).join(''):'<p class="empty">No wires yet.</p>'}</div>
+      <p class="tip">Length includes the ${epSet().spare}% spare. Fill compares the cables' cross-section with the inside of the conduit.</p>`;}
+  const d=epDev(s.id);if(!d)return '';const D=EPDEV[d.type];
+  let h=`<div class="selname">${D.label}<span class="selbtns"><button class="btn" id="epDel">Delete</button></span></div><div class="kv"><label for="epName">Name</label><input id="epName" data-type="text" style="font-family:var(--f-body)" value="${esc(d.name||'')}">`;
+  const num=(lab,id,v,unit)=>`<label for="${id}">${lab}</label><input id="${id}" data-type="num" value="${v}"${unit?` placeholder="${unit}"`:''}>`;
+  if(D.mount==='wall')h+=field('Height to centre','epH',fmtLen(d.h!=null?d.h:D.h));
+  if(d.type==='panel'){h+=`<label for="epMain">Main breaker</label><select id="epMain">${BRK_AMPS.map(a=>opt(a,d.main||63,a+' A')).join('')}</select>
+      <label for="epPoles">Main poles</label><select id="epPoles">${[1,2,3,4].map(n=>opt(n,d.poles||2,n+'P')).join('')}</select>
+      <label>Feed size in</label><div class="seg segsm" role="group" aria-label="Feed size standard"><button data-fstd="mm2" aria-pressed="${d.feedStd!=='awg'}">mm²</button><button data-fstd="awg" aria-pressed="${d.feedStd==='awg'}">AWG</button></div>
+      <label for="epFeed">Main feed wire</label><select id="epFeed">${WIRE_SIZES[d.feedStd==='awg'?'awg':'mm2'].map(v=>opt(v,d.feedSize,v+(d.feedStd==='awg'?' AWG':' mm²'))).join('')}</select>
+      ${field('Feed length','epFeedLen',fmtLen(d.feedLen||0))}</div>
+      <p class="h" style="margin-top:10px">Breakers</p><div class="brks">
+      ${(d.brk||[]).map((b,i)=>`<div class="brk"><input data-bk="${i}" data-f="name" value="${esc(b.name||'')}" placeholder="Name, e.g. Kitchen" aria-label="Breaker name"><button class="btn" data-bkdel="${i}" aria-label="Remove breaker">×</button>
+        <select data-bk="${i}" data-f="amps" aria-label="Size">${BRK_AMPS.map(a=>opt(a,b.amps,a+' A')).join('')}</select><select data-bk="${i}" data-f="poles" aria-label="Poles">${[1,2,3].map(n=>opt(n,b.poles||1,n+'P')).join('')}</select><select data-bk="${i}" data-f="type" aria-label="Type">${BRK_TYPES.map(v=>opt(v,b.type||'MCB')).join('')}</select></div>`).join('')||'<p class="empty">No breakers yet.</p>'}</div>
+      <div class="rowbtns"><button class="btn" id="epAddBrk">Add breaker</button><button class="btn" id="epAddSolar">Add solar breaker</button></div>
+      <p class="tip">Wires connected to this panel pick their breaker in the wire's panel (Circuit). A solar breaker takes the AC feed from the inverter.</p>`;return h;}
+  if(d.type==='pv')h+=num('Panels','epCount',d.count||8)+num('Per row','epCols',d.cols||4)+num('Watts each','epWatt',d.watt||450)+num('Turn (°)','epRot',d.r||0)+`<label>Total</label><span class="ro big">${((d.count||8)*(d.watt||450)/1000).toFixed(2)} kWp</span>`;
+  if(d.type==='dciso')h+=`<label for="epAmps">Rating</label><select id="epAmps">${[16,20,25,32,40,50,63].map(a=>opt(a,d.amps||32,a+' A')).join('')}</select>`+num('Volts DC','epVolts',d.volts||1000);
+  if(d.type==='inverter')h+=num('Power (kW)','epKw',d.kw||5);
+  if(d.type==='battery')h+=num('Capacity (kWh)','epKwh',d.kwh||10)+num('Volts','epVolts',d.volts||48);
+  if(d.type==='jbox')h+=field('Height','epH',d.h!=null?fmtLen(d.h):'')+`<label></label><span class="ro" style="font-family:var(--f-body);font-size:11.5px">Empty = in the ceiling</span>`;
+  h+=`</div><p class="tip">${D.mount==='wall'?'Drag it along the wall, or onto another wall.':'Drag it to move it.'} ${d.type==='pv'?'Solar chain: panels → DC isolator → inverter (→ battery) → solar breaker in the panel, joined with DC and AC wires.':''}</p>`;return h;}
+function epBindInspector(){const el=$('#inspector');const ed=fn=>{mutate(fn);renderInspector();renderTakeoff();dirty();};const s=sel;
+  el.querySelectorAll('[data-epstd]').forEach(b=>b.onclick=()=>ed(()=>{epW().set.std=b.dataset.epstd;}));
+  if(!s||s.kind!=='ep')return;const o=s.t==='wire'?epWire(s.id):s.t==='tube'?epTube(s.id):epDev(s.id);if(!o)return;
+  const on=(id,fn)=>{const e=document.getElementById(id);if(e)e.onchange=()=>fn(e.value);};
+  const dl=$('#epDel');if(dl)dl.onclick=()=>epDelete();
+  on('epName',v=>ed(()=>o.name=v.trim()||o.name));
+  el.querySelectorAll('[data-smooth]').forEach(b=>b.onclick=()=>ed(()=>o.smooth=b.dataset.smooth==='1'));
+  if(s.t==='wire'){el.querySelectorAll('[data-epkind]').forEach(b=>b.onclick=()=>ed(()=>{o.kind=b.dataset.epkind;if(o.kind==='dc'&&o.cores===3)o.cores=2;if(o.kind==='ac'&&o.cores===2)o.cores=3;}));
+    el.querySelectorAll('[data-wstd]').forEach(b=>b.onclick=()=>ed(()=>{if(o.std===b.dataset.wstd)return;const a=wireMM2(o);o.std=b.dataset.wstd;const L=WIRE_SIZES[o.std];o.size=o.std==='awg'?L.reduce((x,y)=>Math.abs(AWG_MM2[y]-a)<Math.abs(AWG_MM2[x]-a)?y:x):L.reduce((x,y)=>Math.abs(+y-a)<Math.abs(+x-a)?y:x);}));
+    on('epSize',v=>ed(()=>o.size=v));on('epCores',v=>ed(()=>o.cores=+v));on('epRoute',v=>ed(()=>o.route=v));on('epCa',v=>ed(()=>o.ca=v));on('epCb',v=>ed(()=>o.cb=v));on('epCirc',v=>ed(()=>o.circuit=v||undefined));}
+  if(s.t==='tube'){on('epType',v=>ed(()=>o.type=v));on('epDia',v=>ed(()=>o.dia=+v));
+    el.querySelectorAll('[data-tw]').forEach(c=>c.onchange=()=>ed(()=>{const L=new Set(o.wires||[]);c.checked?L.add(c.dataset.tw):L.delete(c.dataset.tw);o.wires=[...L];}));}
+  if(s.t==='dev'){const nv=(id,fn,mn)=>on(id,v=>{const x=parseFloat(v);if(isFinite(x)&&x>=(mn||0))ed(()=>fn(x));else renderInspector();});
+    on('epH',v=>{if(o.type==='jbox'&&!v.trim()){ed(()=>delete o.h);return;}const L=parseLen(v);if(L>=0)ed(()=>o.h=L);else renderInspector();});
+    on('epMain',v=>ed(()=>o.main=+v));on('epPoles',v=>ed(()=>o.poles=+v));on('epFeed',v=>ed(()=>o.feedSize=v));
+    on('epFeedLen',v=>{const L=parseLen(v);if(L>=0)ed(()=>o.feedLen=L);else renderInspector();});
+    el.querySelectorAll('[data-fstd]').forEach(b=>b.onclick=()=>ed(()=>{if(o.feedStd===b.dataset.fstd)return;o.feedStd=b.dataset.fstd;o.feedSize=o.feedStd==='awg'?'4':'16';}));
+    nv('epCount',x=>o.count=Math.round(x),1);nv('epCols',x=>o.cols=Math.round(x),1);nv('epWatt',x=>o.watt=x,1);nv('epRot',x=>o.r=x);nv('epKw',x=>o.kw=x,0.1);nv('epKwh',x=>o.kwh=x,0.1);nv('epVolts',x=>o.volts=x,1);on('epAmps',v=>ed(()=>o.amps=+v));
+    el.querySelectorAll('[data-bk]').forEach(c=>c.onchange=()=>ed(()=>{const b=o.brk[+c.dataset.bk];const f=c.dataset.f;b[f]=f==='amps'||f==='poles'?+c.value:c.value;}));
+    el.querySelectorAll('[data-bkdel]').forEach(c=>c.onclick=()=>ed(()=>{const b=o.brk.splice(+c.dataset.bkdel,1)[0];epD().wires.forEach(w=>{if(w.circuit===b.id)delete w.circuit;});}));
+    const ab=$('#epAddBrk');if(ab)ab.onclick=()=>ed(()=>{o.brk=o.brk||[];o.brk.push({id:nid('k'),name:'Circuit '+(o.brk.length+1),amps:16,poles:1,type:'MCB'});});
+    const as=$('#epAddSolar');if(as)as.onclick=()=>ed(()=>{o.brk=o.brk||[];o.brk.push({id:nid('k'),name:'Solar',amps:25,poles:2,type:'Solar'});});}}
+
+// ---- worksheet: everything entered, with sizes and lengths, ready to be priced
+function epRows(){const E=epD(),rows=[],R=(cat,item,spec,qty,unit)=>rows.push({cat,item,spec,qty,unit});const m=mm=>+(isMetric()?mm/1000:mm/304.8).toFixed(2),u=runU();
+  const cab={};E.wires.forEach(w=>{const k=(w.kind==='dc'?'DC':'AC')+'|'+wireSizeTxt(w)+'|'+(w.cores||1);cab[k]=(cab[k]||0)+wireLens(w).total;});
+  E.devs.filter(d=>d.type==='panel'&&d.feedLen).forEach(d=>{const k='AC|'+(d.feedStd==='awg'?d.feedSize+' AWG':d.feedSize+' mm²')+'|'+((d.poles||2)>2?5:3)+'|feed';cab[k]=(cab[k]||0)+d.feedLen*(1+epSet().spare/100);});
+  Object.keys(cab).sort().forEach(k=>{const [kd,sz,c,f]=k.split('|');R('Cable',(f?'Main feed cable ':kd+' cable ')+c+'-core',sz,m(cab[k]),u);});
+  const tb={};E.tubes.forEach(t=>{const k=t.type+'|'+t.dia;tb[k]=(tb[k]||0)+tubeLen(t);});Object.keys(tb).sort().forEach(k=>{const [ty,d]=k.split('|');R('Conduit',ty+' conduit','Ø'+d+' mm',m(tb[k]),u);});
+  const jb=E.devs.filter(d=>d.type==='jbox').length;if(jb)R('Boxes','Junction box','',jb,'pcs');
+  const cn={};E.wires.forEach(w=>[w.ca,w.cb].forEach(c=>{if(c&&c!=='none')cn[c]=(cn[c]||0)+(c==='mc4'?1:(w.cores||1));}));Object.keys(cn).forEach(c=>R('Connectors',CONNECTORS[c],c==='mc4'?'pairs':'per core',cn[c],'pcs'));
+  E.devs.filter(d=>d.type==='panel').forEach(d=>{R('Panel','Breaker panel '+(d.name||''),(d.brk||[]).length+' ways · main '+(d.main||63)+' A '+(d.poles||2)+'P',1,'pcs');R('Breakers','Main breaker',(d.main||63)+' A '+(d.poles||2)+'P',1,'pcs');});
+  const bk={};E.devs.filter(d=>d.type==='panel').forEach(d=>(d.brk||[]).forEach(b=>{const k=(b.type||'MCB')+'|'+b.amps+' A '+(b.poles||1)+'P';bk[k]=(bk[k]||0)+1;}));
+  Object.keys(bk).sort().forEach(k=>{const [t,s]=k.split('|');R('Breakers',t==='Solar'?'Solar breaker':t,s,bk[k],'pcs');});
+  E.devs.filter(d=>d.type==='meter').forEach(d=>R('Supply','Grid supply / meter',d.name||'',1,'pcs'));
+  E.devs.filter(d=>d.type==='pv').forEach(d=>R('Solar','Solar panel',(d.watt||450)+' W',d.count||8,'pcs'));
+  E.devs.filter(d=>d.type==='dciso').forEach(d=>R('Solar','DC isolator',(d.amps||32)+' A · '+(d.volts||1000)+' V DC',1,'pcs'));
+  E.devs.filter(d=>d.type==='inverter').forEach(d=>R('Solar','Inverter',(d.kw||5)+' kW',1,'pcs'));
+  E.devs.filter(d=>d.type==='battery').forEach(d=>R('Solar','Battery',(d.kwh||10)+' kWh · '+(d.volts||48)+' V',1,'pcs'));
+  const c={};(M.elec||[]).forEach(x=>{const k=x.type==='switch'?'Switch|'+(x.gangs||1)+'-gang':x.type==='socket'?'Socket|'+(x.dbl?'double':'single'):x.type==='strip'?'Strip light|':ELEC[x.type].label+'|';c[k]=(c[k]||0)+(x.type==='strip'?dist(x.a,x.b):1);});
+  Object.keys(c).sort().forEach(k=>{const [it,sp]=k.split('|');if(it==='Strip light')R('Devices',it,sp,m(c[k]),u);else R('Devices',it,sp,c[k],'pcs');});
+  return rows;}
+function epRuns(){return epD().wires.map(w=>{const L=wireLens(w);const b=w.circuit&&epD().devs.flatMap(d=>(d.brk||[]).map(x=>({d,x}))).find(o=>o.x.id===w.circuit);
+  return {name:w.name||'',from:refName(w.ea),to:refName(w.eb),spec:(w.kind==='dc'?'DC ':'AC ')+wireSizeTxt(w)+' '+(w.cores||1)+'C',circuit:b?(b.d.name||'')+' '+(b.x.name||'')+' '+b.x.amps+' A':'',plan:L.plan,drops:L.drops,total:L.total};});}
+function epCSV(){const q=v=>{v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};const u=runU();
+  let s='Electric plan worksheet,'+q(M.name||'')+'\nSpare included,'+epSet().spare+'%\n\nCategory,Item,Size / rating,Quantity,Unit,Unit price,Total\n';
+  epRows().forEach((r,i)=>{s+=[r.cat,r.item,r.spec,r.qty,r.unit].map(q).join(',')+',,=D'+(i+5)+'*F'+(i+5)+'\n';});
+  s+='\nWire runs\nName,From,To,Cable,Circuit,On plan ('+u+'),Up/down ('+u+'),Total with spare ('+u+')\n';
+  epRuns().forEach(r=>{s+=[r.name,r.from,r.to,r.spec,r.circuit,fmtRun(r.plan),fmtRun(r.drops),fmtRun(r.total)].map(q).join(',')+'\n';});return s;}
+function epSheetHTML(full){const rows=epRows();if(!rows.length)return '<p class="empty">Nothing yet. Draw wires and place the panel, and they are listed here with sizes and lengths.</p>';
+  let h=`<table class="qt eptab"><thead><tr><th>Item</th><th>Size</th><th>Qty</th>${full?'<th>Unit price</th><th>Total</th>':''}</tr></thead><tbody>`;let cat='';
+  rows.forEach(r=>{if(r.cat!==cat){cat=r.cat;h+=`<tr class="epcat"><td colspan="${full?5:3}">${esc(cat)}</td></tr>`;}h+=`<tr><td>${esc(r.item)}</td><td>${esc(r.spec)}</td><td>${r.qty} ${esc(r.unit)}</td>${full?'<td></td><td></td>':''}</tr>`;});
+  h+='</tbody></table>';
+  if(full){const runs=epRuns();if(runs.length){h+=`<p class="h" style="margin-top:14px">Wire runs</p><table class="qt eptab"><thead><tr><th>Name</th><th>From → to</th><th>Cable</th><th>Circuit</th><th>Plan</th><th>Up/down</th><th>Total</th></tr></thead><tbody>`+
+    runs.map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.from)} → ${esc(r.to)}</td><td>${esc(r.spec)}</td><td>${esc(r.circuit)}</td><td>${fmtRun(r.plan)}</td><td>${fmtRun(r.drops)}</td><td>${fmtRun(r.total)}</td></tr>`).join('')+'</tbody></table>';}}
+  return h;}
+function epSidePanel(){const el=$('#epSheet');if(!el)return;
+  el.innerHTML=`<p class="h">Worksheet</p><div class="kv"><label for="epSpare">Spare</label><input id="epSpare" data-type="num" value="${epSet().spare}%"></div>${epSheetHTML(false)}
+    <div class="rowbtns"><button class="btn" id="epOpenSheet">Open worksheet</button><button class="btn" id="epSaveCSV">Save as CSV</button></div><p class="unitnote">Lengths include the spare and the runs up and down to each part. The CSV opens in Excel with empty price columns.</p>`;
+  $('#epSpare').onchange=e=>{const x=parseFloat(e.target.value);if(isFinite(x)&&x>=0&&x<=100){mutate(()=>epW().set.spare=x);}renderTakeoff();renderInspector();dirty();};
+  $('#epOpenSheet').onclick=()=>{const b=document.createElement('div');b.className='epsheet';b.innerHTML=epSheetHTML(true);
+    openModal('Electric plan worksheet',(M.name||'Project')+' · lengths in '+runU()+' include '+epSet().spare+'% spare.',null,[{label:'Close',fn:closeModal},{label:'Copy as CSV',fn:e=>copyText(epCSV(),e)},{label:'Save as CSV',primary:true,fn:()=>{closeModal();epSaveCSV();}}],b,true);};
+  $('#epSaveCSV').onclick=epSaveCSV;}
+async function epSaveCSV(){try{const p=await saveTextFile(safeName((M.name||'project')+' electric worksheet')+'.csv',epCSV(),'Spreadsheet (CSV)',['csv']);if(p)toast('Saved '+baseName(p));}catch(err){toast('Could not save: '+err);}}
 
 
 /* ============================== leaving the app: back button, closing the window ============================== */

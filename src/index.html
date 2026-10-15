@@ -19,7 +19,7 @@
     <span class="spacer"></span>
     <div class="viewrow"><button class="laserbtn" id="laserBtn" type="button" data-state="off" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 9a14.5 14.5 0 0 1 20 0"/><path d="M5.2 12.6a10 10 0 0 1 13.6 0"/><path d="M8.6 16.1a5 5 0 0 1 6.8 0"/><circle cx="12" cy="19.6" r="1.3" fill="currentColor" stroke="none"/></svg><span id="laserLbl">Laser</span></button>
     <div class="seg" role="group" aria-label="View">
-      <button id="vPlan" data-view="plan">Plan</button><button id="vSplit" data-view="split">Plan + 3D</button><button id="vElev" data-view="elev">Elevations</button><button id="v3d" data-view="3d">3D</button>
+      <button id="vPlan" data-view="plan">Plan</button><button id="vEplan" type="button" class="epbtn" aria-pressed="false">Electric plan</button><button id="vSplit" data-view="split">Plan + 3D</button><button id="vElev" data-view="elev">Elevations</button><button id="v3d" data-view="3d">3D</button>
     </div></div>
     <div class="menuwrap measwrap"><button class="btn togglebtn" id="measBtn" aria-haspopup="true" aria-expanded="false" aria-controls="measMenu" aria-pressed="true" title="Choose which measurements show on the plan">Measures ▾</button>
           <div class="menu measmenu" id="measMenu" hidden>
@@ -118,6 +118,25 @@
         <button class="titem tool" data-tool="elec" data-kind="wpsocket" title="Outdoor (weatherproof) socket: click on a wall"><span class="ico" data-icon="e_wp"></span><span class="tl">Outdoor socket</span></button>
       </div>
     </section>
+    <section class="tsec eponly" data-sec="eplan">
+      <button class="sechead" aria-expanded="true" aria-controls="libEplan">Electric plan<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="toollist lib" id="libEplan">
+        <button class="titem tool" data-tool="select" title="Pointer: select and edit wires, conduits and parts (V)"><span class="ico" data-icon="select"></span><span class="tl">Pointer</span></button>
+        <p class="libsub">Wiring</p>
+        <button class="titem tool" data-tool="eplan" data-kind="wire_ac" title="AC wire: click from part to part"><span class="ico" data-icon="ep_wire"></span><span class="tl">AC wire</span></button>
+        <button class="titem tool" data-tool="eplan" data-kind="wire_dc" title="DC wire: click from part to part"><span class="ico" data-icon="ep_dcwire"></span><span class="tl">DC wire</span></button>
+        <button class="titem tool" data-tool="eplan" data-kind="tube" title="Conduit: click along its route"><span class="ico" data-icon="ep_tube"></span><span class="tl">Conduit</span></button>
+        <button class="titem tool" data-tool="eplan" data-kind="jbox" title="Junction box: click where it goes"><span class="ico" data-icon="ep_jbox"></span><span class="tl">Junction box</span></button>
+        <p class="libsub">Supply</p>
+        <button class="titem tool" data-tool="eplan" data-kind="panel" title="Breaker panel: click on a wall"><span class="ico" data-icon="ep_panel"></span><span class="tl">Breaker panel</span></button>
+        <button class="titem tool" data-tool="eplan" data-kind="meter" title="Grid supply / meter: click on a wall"><span class="ico" data-icon="ep_meter"></span><span class="tl">Grid supply</span></button>
+        <p class="libsub">Solar</p>
+        <button class="titem tool" data-tool="eplan" data-kind="pv" title="Solar panels: click where the array goes"><span class="ico" data-icon="ep_pv"></span><span class="tl">Solar panels</span></button>
+        <button class="titem tool" data-tool="eplan" data-kind="dciso" title="DC isolator / breaker: click on a wall"><span class="ico" data-icon="ep_dciso"></span><span class="tl">DC isolator</span></button>
+        <button class="titem tool" data-tool="eplan" data-kind="inverter" title="Inverter: click on a wall"><span class="ico" data-icon="ep_inv"></span><span class="tl">Inverter</span></button>
+        <button class="titem tool" data-tool="eplan" data-kind="battery" title="Battery: click on a wall"><span class="ico" data-icon="ep_bat"></span><span class="tl">Battery</span></button>
+      </div>
+    </section>
   </nav>
 
   <nav class="tabbar" id="tabbar" role="tablist" aria-label="Open projects"></nav>
@@ -127,6 +146,7 @@
       <span class="panelabel">Plan · Level 1</span>
       <div class="paneopts planopts">
         <button class="btn" id="pasteBtn" title="Paste the copied items (Ctrl+V)" hidden>Paste</button>
+        <button class="btn togglebtn" id="epShowBtn" aria-pressed="true" title="Show the electric plan faded over the home plan, or hide it" hidden>Wiring</button>
         <button class="btn togglebtn" id="elecBtn" aria-pressed="true" title="Show or hide the electrical layer: lights, switches and sockets">Electrical</button>
         <button class="btn togglebtn" id="refToggle" aria-pressed="true" title="Show or hide the imported reference drawing" hidden>Reference</button>
         <button class="btn togglebtn" id="freeToggle" aria-pressed="false" title="Drag a wall in any direction instead of only in and out (M)">Free move</button>
@@ -161,13 +181,14 @@
   <aside class="side" id="side">
     <div class="sheethead"><button type="button" class="sheetgrip" id="sheetGrip" aria-label="Close details"><span></span></button><button type="button" class="btn sheetx" id="sheetClose">Close</button></div>
     <section class="sec" id="inspector" aria-live="polite"></section>
-    <section class="sec">
+    <section class="sec eponly" id="epSheet"></section>
+    <section class="sec homeonly">
       <p class="h">Takeoff</p>
       <table class="qt" id="qtable"></table>
       <p class="unitnote" id="qnote"></p>
       <div class="rowbtns"><button class="btn" id="csvBtn">Copy as CSV</button></div>
     </section>
-    <section class="sec">
+    <section class="sec homeonly">
       <p class="h">Fixture schedule</p>
       <div class="sched" id="sched"></div>
     </section>
