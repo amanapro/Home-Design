@@ -2541,9 +2541,10 @@ function loadTabs(){try{const ix=JSON.parse(localStorage.getItem('bm-tabs')||'nu
       t.savedSnap=o.dirty?null:JSON.stringify(t.M);tabs.push(t);}catch(e){}});
     if(!tabs.length)return false;activeTab=tabs.find(t=>t.id===ix.active)||tabs[0];return true;}catch(e){return false;}}
 // older versions kept one drawing; bring it in as the first tab
+let firstRun=false;
 function migrateOld(){let m=null,u=units;try{const s=localStorage.getItem('bm-plan');if(s){const o=JSON.parse(s);if(o&&o.M&&Array.isArray(o.M.walls)){m=o.M;u=normUnits(o.units);snapOn=o.snapOn!==false;freeMove=!!o.freeMove;}}}catch(e){}
   let ref=null,img=null;try{ref=JSON.parse(localStorage.getItem('bm-ref')||'null');}catch(e){}try{img=JSON.parse(localStorage.getItem('bm-refimg')||'null');}catch(e){}
-  const t=makeTab(m?Object.assign(blankModel(),m):sampleModel(),{units:u,ref,img});t.savedSnap=m?null:JSON.stringify(t.M);tabs.push(t);activeTab=t;
+  const t=makeTab(m?Object.assign(blankModel(),m):blankModel(),{units:u,ref,img});t.savedSnap=m?null:JSON.stringify(t.M);tabs.push(t);activeTab=t;if(!m)firstRun=true;
   try{['bm-plan','bm-ref','bm-refimg'].forEach(k=>localStorage.removeItem(k));}catch(e){}}
 async function autosaveTick(){if(!autosaveOn)return;storeActive();const now=Date.now();
   for(const t of tabs){if(!tabDirty(t)||now-(t.lastAuto||0)<AUTOSAVE_MS)continue;t.lastAuto=now;
@@ -3672,12 +3673,23 @@ function wireExit(){
   if(window.top!==window.self)return;
   try{history.pushState({bm:1},'');window.addEventListener('popstate',()=>{if(exiting)return;history.pushState({bm:1},'');handleBack();});}catch(e){}}
 
+
+/* ============================== first start: blank page or the example ============================== */
+function startWith(example){const t=activeTab;if(example){t.M=sampleModel();t.undo=[];t.redo=[];activate(t,true);t.savedSnap=snapshot();renderTabs();saveTabsNow();toast('This is an example flat. Change anything, or press + for a new project.');}
+  else toast('Pick Wall (W) and click to start drawing.');}
+function welcomeDialog(){const body=document.createElement('div');body.className='welcome';
+  body.innerHTML=`<button type="button" class="wcard" id="wBlank"><span class="wimg"><svg viewBox="0 0 64 48" aria-hidden="true"><rect x="6" y="5" width="52" height="38" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M26 24h12M32 18v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="wtx"><b>Blank page</b><span>Start a new plan from scratch.</span></span></button>
+    <button type="button" class="wcard" id="wExample"><span class="wimg"><svg viewBox="0 0 64 48" aria-hidden="true"><rect x="6" y="5" width="52" height="38" rx="2" fill="none" stroke="currentColor" stroke-width="3"/><path d="M28 5v24M6 29h22M28 22h30" stroke="currentColor" stroke-width="2.4"/><rect x="10" y="9" width="7" height="6" fill="currentColor" opacity=".35"/><rect x="10" y="33" width="14" height="6" rx="2" fill="currentColor" opacity=".35"/></svg></span><span class="wtx"><b>Start with an example</b><span>A small flat with a kitchen, bathroom and living room to explore.</span></span></button>`;
+  openModal('Welcome to Benchmark Planner','How would you like to start?',null,[{label:'Open a project file…',fn:()=>{closeModal();openProject();}}],body);
+  $('#wBlank').onclick=()=>{closeModal();startWith(false);};$('#wExample').onclick=()=>{closeModal();startWith(true);};$('#wBlank').focus();}
+
 /* boot */
 if(!loadTabs())migrateOld();
 M=activeTab.M;readColors();
 setSnap(snapOn);setFree(freeMove,true);setEmptyDrag(emptyDrag);setView('plan');setCut(true);
 activate(activeTab,true);syncAutosaveUI();
 if(three.ok){applyLook();syncWalkUI();}
+if(firstRun)setTimeout(welcomeDialog,300);
 $('#laserBtn').onclick=laserBtnClick;renderLaserBtn();wireExit();
 $('#detailsBtn').onclick=()=>setSheet(!$('#app').classList.contains('sheet'));$('#sheetClose').onclick=()=>setSheet(false);$('#sheetGrip').onclick=()=>setSheet(false);
 requestAnimationFrame(()=>{fit();frame3d();build3d();loop();});
