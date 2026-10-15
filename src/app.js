@@ -1281,7 +1281,7 @@ function drawPasteGhost(){if(!clip||!pasteOff)return;
   ctx.restore();const q=toS(add(clip.anchor,off));ctx.strokeStyle=C.snap;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(q[0]-7,q[1]);ctx.lineTo(q[0]+7,q[1]);ctx.moveTo(q[0],q[1]-7);ctx.lineTo(q[0],q[1]+7);ctx.stroke();}
 $('#pasteBtn').onclick=startPaste;
 function syncToolButtons(){document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===tool&&((b.dataset.kind||null)===((tool==='wall'||tool==='area'||tool==='elec')?placeType:(b.dataset.kind||null))))));}
-function setTool(t,type){stripStart=null;elecGhost=null;if(t==='elec'&&!elecOn)setElecLayer(true);if(t!==tool){closeTextEditor(false);ruler=null;arcDraw={a:null,b:null,s:0};areaDraw={pts:[],cur:null,snap:null};}tool=t;placeType=type||null;draw.start=null;ghost=null;hideLenbox();
+function setTool(t,type){if(t==='elec'&&!elecOn){toast('Turn on Electrical (above the plan) to use the electrical tools.');syncToolButtons();return;}stripStart=null;elecGhost=null;if(t!==tool){closeTextEditor(false);ruler=null;arcDraw={a:null,b:null,s:0};areaDraw={pts:[],cur:null,snap:null};}tool=t;placeType=type||null;draw.start=null;ghost=null;hideLenbox();
   syncToolButtons();
   document.querySelectorAll('.lib button[data-type]').forEach(b=>b.setAttribute('aria-pressed',String(t==='place'&&b.dataset.type===type)));
   $('#hint').innerHTML=HINTS[t]||'';$('#snapchip').textContent='';planCv.style.cursor=t==='select'?'default':'crosshair';
@@ -1369,7 +1369,9 @@ planCv.addEventListener('pointerdown',e=>{
       else pan={sx:sp[0],sy:sp[1],ox:view.ox,oy:view.oy,click:true,hit:h};
       planCv.setPointerCapture(e.pointerId);return;}
     const ids=selIds();
+    if((mod||e.shiftKey)&&h.kind==='elec'&&!h.end){toggleSelElec(h.id);return;}
     if(mod){if(h.kind==='wall'||h.kind==='end')toggleSelWall(h.id);return;}
+    if(h.kind==='elec'&&sel&&sel.kind==='elecs'&&sel.ids.includes(h.id)){drag={kind:'elecs',id:h.id,p0:p,snap0:snapshot(),moved:false,e0:sel.ids.map(id=>JSON.parse(JSON.stringify(elecById(id))))};planCv.setPointerCapture(e.pointerId);return;}
     if(h.kind==='wall'&&ids.size>1&&ids.has(h.id)){drag={kind:'group',id:h.id,p0:p,snap0:snapshot(),moved:false,set:groupMoveSet(ids),clickId:h.id,toggle:e.shiftKey};planCv.setPointerCapture(e.pointerId);return;}
     const prevSel=sel;
     sel=h.kind==='end'?{kind:'wall',id:h.id}:h;renderInspector();hover=null;
@@ -1425,6 +1427,7 @@ planCv.addEventListener('pointermove',e=>{
       if(c.wall){const sl=hostSlot(add(p,drag.off),Object.assign({},c,{align:'keep'}),c.id);if(sl){if(sl.w.id!==c.wall)c.off=0;c.wall=sl.w.id;c.s=sl.s;if(sl.w.id===c.wall&&c.off==null)c.off=sl.off;syncHostedCols();drag.snap={kind:sl.kind};}drag.guides=[];}
       else{const sn=colSnap(c,add(p,drag.off),c.id);c.x=sn.c.x;c.y=sn.c.y;c.r=sn.c.r;drag.snap={kind:sn.kind};drag.guides=sn.guides;}}
     if(drag.kind==='elec')elecDragMove(drag,p);
+    if(drag.kind==='elecs')elecGroupMove(drag,p);
     if(drag.kind==='item'){const it=M.items.find(x=>x.id===drag.id);const target=add(p,drag.off);const r=fixtureSnap(target,it);it.x=r.x;it.y=r.y;if(r.snapped)it.r=r.r;}
     if(drag.kind==='opening'){const o=M.openings.find(x=>x.id===drag.id);let w=nearestWall(p,24)||wallById(o.wall);const sl=openingSlot(p,w,o.w)||openingSlotLoose(p,w,o.w);if(sl){o.wall=w.id;o.s=sl.s;}}
     $('#snapchip').textContent=drag.snap&&drag.snap.kind!=='free'&&drag.snap.kind!=='angle'?drag.snap.kind:'';
@@ -1651,11 +1654,13 @@ function endPointer(e){
   if(e.pointerType==='touch'){touches.delete(e.pointerId);if(pinch){if(touches.size<2)pinch=null;return;}}
   if(box){const b=box;box=null;dirty();
     if(Math.hypot(b.s1[0]-b.s0[0],b.s1[1]-b.s0[1])<5){if(!b.add){sel=b.hit&&b.hit.kind==='room'?b.hit:null;if(sel){elevPt=sel.pt.slice();fillElevSelect();}renderInspector();}return;}
+    {const fe=elecInBox(toW(b.s0),toW(b.s1),b.s1[0]<b.s0[0]);if(fe.length){setSelElecs(b.add?[...elecSelIds(),...fe]:fe);$('#snapchip').textContent=fe.length+' electrical part'+(fe.length>1?'s':'')+' selected';return;}}
     const found=wallsInBox(toW(b.s0),toW(b.s1),b.s1[0]<b.s0[0]);setSelWalls(b.add?[...selIds(),...found]:found);
     $('#snapchip').textContent=found.length?found.length+' wall'+(found.length>1?'s':'')+' selected':'';return;}
   if(pan){if(pan.click){sel=pan.hit&&pan.hit.kind==='room'?pan.hit:null;if(sel){elevPt=sel.pt.slice();fillElevSelect();}renderInspector();dirty();}pan=null;return;}
   if(drag&&!drag.moved){ // a click, not a drag
     if(drag.kind==='group'){drag.toggle?toggleSelWall(drag.clickId):setSelWalls([drag.clickId]);drag=null;return;}
+    if(drag.kind==='elecs'){setSelElecs([drag.id]);drag=null;return;}
     if(drag.toggleFrom!==undefined){sel=drag.toggleFrom;toggleSelWall(drag.id);drag=null;return;}}
   if(drag&&drag.moved&&drag.kind==='end'&&drag.snap&&['end','on wall','to wall','mid'].includes(drag.snap.kind)){ // dropped onto another wall: join it
     const q=drag.snap.p;drag.links.forEach(([w,k])=>setLoose(w,k,false));M.walls.forEach(o=>['a','b'].forEach(k=>{if(dist(o[k],q)<1)setLoose(o,k,false);}));}
@@ -1678,9 +1683,13 @@ planCv.addEventListener('dblclick',()=>{if(tool==='wall'){draw.start=null;draw.c
 planCv.addEventListener('pointerleave',()=>{if(tool==='door'||tool==='window'){ghost=null;dirty();}if(colGhost){colGhost.on=false;dirty();}});
 planCv.addEventListener('wheel',e=>{e.preventDefault();const sp=evPoint(e);
   const pinch=e.ctrlKey;const mouseWheel=!pinch&&e.deltaX===0&&(e.deltaMode===1||Math.abs(e.deltaY)>=50&&Number.isInteger(e.deltaY));
-  if(pinch||mouseWheel){const k=Math.exp(-e.deltaY*(pinch?0.01:0.0015));const w=toW(sp);view.s=clamp(view.s*k,0.008,3);view.ox=sp[0]-w[0]*view.s;view.oy=sp[1]-w[1]*view.s;}
+  if(pinch||mouseWheel){const k=Math.exp(-clamp(e.deltaY,-60,60)*(pinch?0.01:0.0015));const w=toW(sp);view.s=clamp(view.s*k,0.008,3);view.ox=sp[0]-w[0]*view.s;view.oy=sp[1]-w[1]*view.s;}
   else{view.ox-=e.deltaX;view.oy-=e.deltaY;}dirty();},{passive:false});
 
+function zoomPlan(k,sp){const r=planCv.getBoundingClientRect();sp=sp||[r.width/2,r.height/2];const w=toW(sp);view.s=clamp(view.s*k,0.008,3);view.ox=sp[0]-w[0]*view.s;view.oy=sp[1]-w[1]*view.s;dirty();}
+{let g0=null;planCv.addEventListener('gesturestart',e=>{e.preventDefault();g0={s:view.s};});
+  planCv.addEventListener('gesturechange',e=>{e.preventDefault();if(!g0)return;const r=planCv.getBoundingClientRect();zoomPlan(g0.s*e.scale/view.s,[e.clientX-r.left,e.clientY-r.top]);});
+  planCv.addEventListener('gestureend',e=>{e.preventDefault();g0=null;});}
 /* length entry */
 const lenbox=$('#lenbox'),lenInput=$('#lenInput');
 function positionLenbox(){const s=toS(cursor);const r=planCv.getBoundingClientRect();lenbox.style.left=clamp(s[0]+16,4,r.width-180)+'px';lenbox.style.top=clamp(s[1]+16,4,r.height-40)+'px';}
@@ -1721,6 +1730,8 @@ window.addEventListener('keydown',e=>{
   if(tool==='area'&&areaDraw.pts.length){if(k==='enter'){e.preventDefault();finishArea();return;}if(k==='escape'){areaDraw={pts:[],cur:null,snap:null};renderInspector();dirty();return;}
     if(k==='backspace'){e.preventDefault();areaDraw.pts.pop();renderInspector();dirty();return;}}
   if(k==='escape'&&tool==='ruler'&&ruler){ruler=null;renderInspector();dirty();return;}
+  if(!e.ctrlKey&&!e.metaKey&&(e.key==='+'||e.key==='=')){e.preventDefault();zoomPlan(1.25);return;}
+  if(!e.ctrlKey&&!e.metaKey&&(e.key==='-'||e.key==='_')){e.preventDefault();zoomPlan(0.8);return;}
   if(k==='escape'&&tool==='elec'&&stripStart){stripStart=null;elecGhost=null;renderInspector();dirty();return;}
   if(k==='escape'&&laser.picking){laser.picking=false;$('#hint').innerHTML=HINTS[tool]||'';toast('Laser reading cancelled.');return;}
   if(k==='escape'){if(tool==='wall'&&draw.start){draw.start=null;draw.chainStart=null;}else{setTool('select');sel=null;renderInspector();}dirty();return;}
@@ -1743,6 +1754,7 @@ function nudge(v,mult){
   if(sel.kind==='col'){const c=colById(sel.id);if(c){if(c.wall){const w=wallById(c.wall),d=wallDir(w),n=perp(d);const a=dot(v,d),b=dot(v,n);
       if(Math.abs(a)>0.5)c.s+=Math.sign(a)*step;else c.off=(c.off||0)+Math.sign(b)*step;syncHostedCols();}else{c.x+=v[0]*step;c.y+=v[1]*step;}did=true;msg='column moved '+fmtLen(step);}}
   if(sel.kind==='item'){const it=M.items.find(x=>x.id===sel.id);if(it){it.x+=v[0]*step;it.y+=v[1]*step;did=true;msg='moved '+fmtLen(step);}}
+  if(sel.kind==='elec'||sel.kind==='elecs'){elecNudge(elecSelIds(),v,step);did=true;msg='moved '+fmtLen(step);}
   if(sel.kind==='opening'){const o=M.openings.find(x=>x.id===sel.id),w=o&&wallById(o.wall);if(w){const a=dot(v,wallDir(w));if(Math.abs(a)>0.5){o.s+=Math.sign(a)*step;did=true;msg='moved '+fmtLen(step);}}}
   if(did){if(newBurst)pushUndo(before);changed();}
   if(msg){$('#snapchip').textContent=msg;clearTimeout(nudge.t);nudge.t=setTimeout(()=>$('#snapchip').textContent='',1400);}}
@@ -1755,7 +1767,8 @@ function deleteSel(){if(!sel)return;const s=sel;if(s.kind==='room'){const r=selR
   if(s.kind==='area')M.areas=M.areas.filter(o=>o.id!==s.id);
   if(s.kind==='text')M.texts=M.texts.filter(o=>o.id!==s.id);
   if(s.kind==='col')M.cols=M.cols.filter(o=>o.id!==s.id);
-  if(s.kind==='elec')M.elec=(M.elec||[]).filter(o=>o.id!==s.id);});sel=null;renderInspector();}
+  if(s.kind==='elec')M.elec=(M.elec||[]).filter(o=>o.id!==s.id);
+  if(s.kind==='elecs'){const ids=new Set(s.ids);M.elec=(M.elec||[]).filter(o=>!ids.has(o.id));}});sel=null;renderInspector();}
 function updateCoords(){$('#coords').textContent='x '+fmtLen(cursor[0])+' · y '+fmtLen(-cursor[1]);}
 
 /* ============================== inspector & takeoff ============================== */
@@ -1829,6 +1842,7 @@ function renderInspector(){setTimeout(sheetFollowSel,0);
       ${field('Width','oW',fmtLen(o.w))}${field('Height','oH',fmtLen(o.h))}${o.kind==='window'?field('Sill height','oSill',fmtLen(o.sill)):''}
       ${field('From face','oOff',fmtLen(o.s-o.w/2-ext[0]))}${o.kind==='door'?selectField('Type','oStyle',DOORSTYLES,o.style||'swing'):''}</div>${o.kind==='door'?(o.style==='slide2'?'':`<div class="rowbtns"><button class="btn" id="flipBtn">${isSliding(o)?'Other side of the wall':'Flip swing side'}</button><button class="btn" id="hingeBtn">${isSliding(o)?'Slide the other way':'Swap hinge'}</button></div>`):''}`;}
   if(sel.kind==='elec'){const E=elecById(sel.id);if(!E){sel=null;return renderInspector();}h=elecPanelHTML(E,field);}
+  if(sel.kind==='elecs'){h=elecsPanelHTML(sel.ids);}
   if(sel.kind==='item'){const it=M.items.find(x=>x.id===sel.id);if(!it){sel=null;return renderInspector();}
     h=`<div class="selname">${CAT[it.type].label} <span class="selbtns"><button class="btn" id="copyBtn" title="Copy (Ctrl+C), then paste with Ctrl+V">Copy</button><button class="btn" id="delBtn">Delete</button></span></div><div class="kv">
       ${it.type==='firepit'?`<label>Shape</label><div class="seg" role="group" aria-label="Fire pit shape"><button id="fpRound" aria-pressed="${it.shape!=='rect'}">Circular</button><button id="fpRect" aria-pressed="${it.shape==='rect'}">Rectangular</button></div>`:''}
@@ -1937,6 +1951,7 @@ function bindInspector(){
     {const st=$('#oStyle');if(st)st.onchange=()=>{mutate(()=>{if(st.value==='swing')delete o.style;else o.style=st.value;});renderInspector();};}
     const fb=$('#flipBtn');if(fb)fb.onclick=()=>mutate(()=>o.flip^=1);const hb=$('#hingeBtn');if(hb)hb.onclick=()=>mutate(()=>o.hinge^=1);}
   if(sel&&sel.kind==='elec'){const E=elecById(sel.id);if(E)bindElecPanel(E);}
+  if(sel&&sel.kind==='elecs'){const db=$('#delBtn');if(db)db.onclick=()=>deleteSel();}
   if(sel&&sel.kind==='item'){const it=M.items.find(x=>x.id===sel.id);
     const setDim=(k,v,min)=>{const x=len(v,min);if(x!==null)mutate(()=>{
       if(k==='d'){const back=add([it.x,it.y],rotV([0,-it.d/2],it.r));it.d=x;const c=add(back,rotV([0,x/2],it.r));it.x=c[0];it.y=c[1];}else it[k]=x;});renderInspector();};
@@ -2538,7 +2553,8 @@ let elecGhost=null,stripStart=null;
 const elecList=()=>M.elec||(M.elec=[]);
 const elecById=id=>elecList().find(e=>e.id===id);
 function setElecLayer(on){elecOn=on;try{localStorage.setItem('bm-elec',on?'1':'0');}catch(e){}const b=$('#elecBtn');if(b)b.setAttribute('aria-pressed',String(on));
-  if(!on&&sel&&sel.kind==='elec'){sel=null;renderInspector();}dirty();schedule3d();}
+  document.querySelectorAll('[data-tool="elec"]').forEach(x=>{x.classList.toggle('lockd',!on);x.setAttribute('aria-disabled',String(!on));x.title=x.title.replace(/ \(turn on Electrical first\)$/,'')+(on?'':' (turn on Electrical first)');});
+  if(!on&&tool==='elec')setTool('select');if(!on&&sel&&(sel.kind==='elec'||sel.kind==='elecs')){sel=null;renderInspector();}dirty();schedule3d();}
 // where a wall-mounted part is: point on the wall face, and the direction pointing into the room
 function elecWallPos(E){const w=wallById(E.wall);if(!w)return null;const d=wallDir(w),n=mul(perp(d),E.side||1);const s=clamp(E.s,0,wallLen(w));
   return {p:add(add(w.a,mul(d,s)),mul(n,w.t/2)),n,d,w};}
@@ -2582,16 +2598,44 @@ function drawElecItem(E,selected,ghost){const D=ELEC[E.type];if(!D)return;const 
     ctx.beginPath();for(let i=0;i<8;i++){const a=i/8*Math.PI*2+Math.PI/8;ctx.moveTo(q[0]+Math.cos(a)*s*0.65,q[1]+Math.sin(a)*s*0.65);ctx.lineTo(q[0]+Math.cos(a)*s*0.95,q[1]+Math.sin(a)*s*0.95);}ctx.stroke();ring(q,s*1.15);}
   ctx.restore();elecLabel(E,[q[0]+s*1.2,q[1]-s*0.9],true);}
 function elecLabel(E,q,screen){if(!E.label)return;ctx.save();ctx.font='600 10.5px '+getComputedStyle(document.body).fontFamily;ctx.fillStyle=ELEC[E.type].group==='light'?ELEC_COL.light:ELEC_COL.plug;ctx.textAlign=screen?'left':'center';ctx.textBaseline='middle';ctx.fillText(E.label,q[0],q[1]);ctx.restore();}
-function drawElecLayer(){if(!elecOn||!M.elec)return;M.elec.forEach(E=>drawElecItem(E,sel&&sel.kind==='elec'&&sel.id===E.id,false));}
+
+// several electrical parts selected together: {kind:'elecs', ids}
+const elecSelIds=()=>!sel?[]:sel.kind==='elec'?[sel.id]:sel.kind==='elecs'?sel.ids.slice():[];
+function setSelElecs(ids){ids=[...new Set(ids)].filter(id=>elecById(id));sel=!ids.length?null:ids.length===1?{kind:'elec',id:ids[0]}:{kind:'elecs',ids};renderInspector();dirty();}
+function toggleSelElec(id){const ids=elecSelIds();const i=ids.indexOf(id);if(i>=0)ids.splice(i,1);else ids.push(id);setSelElecs(ids);}
+function elecInBox(a,b,crossing){if(!elecOn||!M.elec)return [];const x0=Math.min(a[0],b[0]),x1=Math.max(a[0],b[0]),y0=Math.min(a[1],b[1]),y1=Math.max(a[1],b[1]);const ins=q=>q&&q[0]>=x0&&q[0]<=x1&&q[1]>=y0&&q[1]<=y1;
+  return M.elec.filter(E=>E.a?(crossing?ins(E.a)||ins(E.b):ins(E.a)&&ins(E.b)):ins(elecPos(E))).map(E=>E.id);}
+function elecShift(E,E0,dv){if(E0.a){E.a=add(E0.a,dv);E.b=add(E0.b,dv);return;}
+  if(E0.wall){const P=elecWallPos(E0);if(!P)return;const sl=wallSlot(add(add(P.p,mul(P.n,30)),dv),60);if(sl){E.wall=sl.wall;E.s=sl.s;E.side=sl.side;}return;}
+  E.x=E0.x+dv[0];E.y=E0.y+dv[1];}
+function elecGroupMove(drag,p){let dv=sub(p,drag.p0);if(snapOn&&!shiftDown)dv=[Math.round(dv[0]/lenStep())*lenStep(),Math.round(dv[1]/lenStep())*lenStep()];
+  drag.e0.forEach(E0=>{const E=elecById(E0.id);if(E)elecShift(E,E0,dv);});drag.snap={kind:drag.e0.length+' parts'};}
+function elecNudge(ids,v,step){ids.forEach(id=>{const E=elecById(id);if(!E)return;const E0=JSON.parse(JSON.stringify(E));
+  if(E.wall){const w=wallById(E.wall);if(!w)return;const a=dot(v,wallDir(w));if(Math.abs(a)>0.5)E.s=clamp(E.s+Math.sign(a)*step,0,wallLen(w));return;}elecShift(E,E0,mul(v,step));});}
+function elecsPanelHTML(ids){const c={};ids.forEach(id=>{const E=elecById(id);if(E)c[E.type]=(c[E.type]||0)+1;});
+  return `<div class="selname">${ids.length} electrical parts<span class="selbtns"><button class="btn" id="delBtn">Delete</button></span></div><div class="kv">${Object.keys(c).map(k=>`<label>${ELEC[k].label}</label><span class="ro">× ${c[k]}</span>`).join('')}</div>
+    <p class="tip">Drag any of them to move them all, or use the arrow keys. <kbd>Ctrl</kbd>/<kbd>Shift</kbd>+click adds or removes one; <kbd>Del</kbd> deletes them.</p>`;}
+// distances from a point to the nearest wall faces, along x and y (or along given directions)
+function rayToWall(p,dir){let best=null,bt=1e12;M.walls.forEach(w=>{[[0,wallLen(w)]].forEach(([s0,s1])=>{const q=pieceQuad(w,s0,s1);   // whole wall: measure to the face even across doors and windows
+    for(let i=0;i<4;i++){const a=q[i],b=q[(i+1)%4],e=sub(b,a),den=cross(dir,e);if(Math.abs(den)<1e-9)continue;const t=cross(sub(a,p),e)/den,u=cross(sub(a,p),dir)/den;
+      if(t>1&&u>=0&&u<=1&&t<bt){bt=t;best=add(p,mul(dir,t));}}});});return best&&bt<30000?best:null;}
+function nearestAlong(p,dirs){let best=null;dirs.forEach(d=>{const q=rayToWall(p,d);if(q&&(!best||dist(p,q)<dist(p,best)))best=q;});return best;}
+function drawElecDims(E){if(!E||!M.walls.length)return;const col=ELEC_COL.light,o={width:1.1};
+  if(E.a){const d=norm(sub(E.b,E.a)),n=perp(d),m=mul(add(E.a,E.b),.5);
+    [[m,[n,mul(n,-1)]],[E.a,[mul(d,-1)]],[E.b,[d]]].forEach(([p,ds])=>{const q=nearestAlong(p,ds);if(q&&dist(p,q)>5)drawMeasure(p,q,col,o);});return;}
+  const p=[E.x,E.y];[[[1,0],[-1,0]],[[0,1],[0,-1]]].forEach(ds=>{const q=nearestAlong(p,ds);if(q&&dist(p,q)>5)drawMeasure(p,q,col,o);});}
+function drawElecLayer(){if(!elecOn||!M.elec)return;const ids=new Set(elecSelIds());M.elec.forEach(E=>drawElecItem(E,ids.has(E.id),false));
+  if(!EXP&&sel&&sel.kind==='elec'){const E=elecById(sel.id);if(E&&!E.wall)drawElecDims(E);}}
 function drawElecTool(){if(tool!=='elec')return;
-  if(placeType==='strip'){if(stripStart){const b=elecGhost&&elecGhost.b||stripStart;drawElecItem({type:'strip',a:stripStart,b},true,true);const L=dist(stripStart,b);if(L>1){const m=toS(mul(add(stripStart,b),.5));txt(fmtLen(L,true),[m[0],m[1]-14],{weight:'600',size:11,color:ELEC_COL.light});}}return;}
-  if(elecGhost)drawElecItem(elecGhost,false,true);}
+  if(placeType==='strip'&&!stripStart&&elecGhost&&elecGhost.c)drawElecDims({x:elecGhost.c[0],y:elecGhost.c[1]});
+  if(placeType==='strip'){if(stripStart){const b=elecGhost&&elecGhost.b||stripStart;drawElecItem({type:'strip',a:stripStart,b},true,true);if(dist(stripStart,b)>50)drawElecDims({a:stripStart,b});const L=dist(stripStart,b);if(L>1){const m=toS(mul(add(stripStart,b),.5));txt(fmtLen(L,true),[m[0],m[1]-14],{weight:'600',size:11,color:ELEC_COL.light});}}return;}
+  if(elecGhost){drawElecItem(elecGhost,false,true);if(elecGhost.x!=null)drawElecDims(elecGhost);}}
 // ---- tool
 function elecToolMove(p){const t=placeType,D=ELEC[t];if(!D)return;
-  if(D.mount==='line'){if(stripStart){const sn=snapPoint(p,stripStart);elecGhost={b:sn.p};}else elecGhost=null;dirty();return;}
+  if(D.mount==='line'){if(stripStart){const sn=snapPoint(p,stripStart);elecGhost={b:sn.p};}else elecGhost={c:snapPoint(p,null).p};dirty();return;}
   if(D.mount==='wall'){const sl=wallSlot(p);elecGhost=sl?Object.assign(newElec(t,sl),{id:'ghost'}):null;$('#snapchip').textContent=sl?'on wall':'';dirty();return;}
   const sn=snapPoint(p,null);elecGhost=Object.assign(newElec(t,{x:sn.p[0],y:sn.p[1]}),{id:'ghost'});dirty();}
-function elecToolClick(p){const t=placeType,D=ELEC[t];if(!D)return;if(!elecOn)setElecLayer(true);
+function elecToolClick(p){const t=placeType,D=ELEC[t];if(!D||!elecOn)return;
   if(D.mount==='line'){const sn=snapPoint(p,stripStart);if(!stripStart){stripStart=sn.p;elecGhost={b:sn.p};renderInspector();dirty();return;}
     if(dist(sn.p,stripStart)<50){toast('Click further away to set the length of the strip.');return;}
     const E=newElec('strip',{a:stripStart.slice(),b:sn.p.slice()});mutate(()=>elecList().push(E));stripStart=null;elecGhost=null;sel={kind:'elec',id:E.id};renderInspector();return;}
@@ -3876,7 +3920,7 @@ setSnap(snapOn);setFree(freeMove,true);setEmptyDrag(emptyDrag);setView('plan');s
 activate(activeTab,true);syncAutosaveUI();
 if(three.ok){applyLook();syncWalkUI();}
 if(firstRun)setTimeout(welcomeDialog,300);
-$('#laserBtn').onclick=laserBtnClick;renderLaserBtn();$('#elecBtn').onclick=()=>{setElecLayer(!elecOn);toast(elecOn?'Electrical layer shown.':'Electrical layer hidden.');};$('#elecBtn').setAttribute('aria-pressed',String(elecOn));wireExit();
+$('#laserBtn').onclick=laserBtnClick;renderLaserBtn();$('#elecBtn').onclick=()=>{setElecLayer(!elecOn);toast(elecOn?'Electrical layer shown.':'Electrical layer hidden.');};setElecLayer(elecOn);$('#zoomIn').onclick=()=>zoomPlan(1.25);$('#zoomOut').onclick=()=>zoomPlan(0.8);wireExit();
 $('#detailsBtn').onclick=()=>setSheet(!$('#app').classList.contains('sheet'));$('#sheetClose').onclick=()=>setSheet(false);$('#sheetGrip').onclick=()=>setSheet(false);
 requestAnimationFrame(()=>{fit();frame3d();build3d();loop();});
 if(!three.ok){$('.pane3d .panelabel').textContent='3D unavailable: the 3D library did not load';}

@@ -166,6 +166,9 @@ Works best with: a clear scan or PDF in which walls are visibly thicker than oth
 - The **Electrical** button above the plan shows or hides the whole layer (hidden parts can't be selected, and they leave 3D, elevations and exports too). Picking an electrical tool shows it again.
 - Select one to change it: switch gangs (1–4), single or double socket, height to centre (switches 1,100 mm, sockets 300 mm, wall lights 1,800 mm to start), strip length and height, chandelier drop, and a label such as a circuit name.
 - Wall-mounted parts appear in the room's elevations at their height. The fixture schedule counts each kind, switch gangs and socket outlets, and adds up strip-light length. AutoCAD export puts lights on `E-LITE` and switches and sockets on `E-POWR`.
+- While placing spot lights, chandeliers, garden lights and strip lights, dimension lines show the distance to the nearest wall faces (across x and y; for a strip, from its side and both ends). They also show when one is selected.
+- Several at once: drag a box around them (with Box select on), or `Ctrl`/`Shift`+click to add or remove. Drag any of them to move them all, use the arrow keys, or press `Del`.
+- When **Electrical** is off its tools are greyed out; turn it on to use them.
 - In 3D, plates and wall lights show on the walls, garden lights stand in the yard, and from inside (Walk) the spot lights, chandeliers and strips show on the ceiling. At **Night** these lights switch on in place of the default room light.
 
 ### 3D: realistic look and walking inside
@@ -220,6 +223,7 @@ The **Outdoor** section in the tool panel has three groups.
 
 ## Using the app
 
+- Zoom: pinch on a touchpad or touchscreen, `Ctrl`+scroll, the **+ / −** buttons at the bottom right of the plan, or the `+` and `-` keys. **Fit** shows everything.
 - First start: the app asks how to begin — **Blank page**, **Start with an example** (a small flat with a kitchen, bathroom and living room), or **Open a project file…**. Later starts reopen your tabs as you left them; **+** gives the same choice of blank or example.
 - Leaving the app: the Android back button first steps out of whatever is open (a dialog, Walk mode, the details panel, a tool, a selection). Then it asks before exiting: **Save and exit** / **Exit without saving** when a project has unsaved changes, or "Are you sure you want to exit?" when everything is saved. Closing the window on a computer asks the same. In a browser, back asks the same way and the browser warns before closing a tab with unsaved work.
 - On a phone, the side panel (sizes and settings of what you select, takeoff and schedule) slides up from the bottom when you tap something, and the plan moves so your selection stays in view. **Details** at the bottom left of the plan opens or closes it at any time; **Close** or the grab bar hides it.
