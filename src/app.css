@@ -37,6 +37,7 @@ img{max-width:100%}
   --fixture:#20282b; --fixture-line:#b7c2c0; --sky:#1a2124; --ground:#2a3336; --tile:#1d3532; --tile-line:#3f655f; --counter:#8a9599; --ref:#5f7488; --col:#b9ab9d; --col-hatch:#8b7e72; color-scheme:dark;
 }
 html,body{height:100%}
+html{touch-action:pan-x pan-y}
 body{background:var(--chrome);color:var(--ink);font-family:var(--f-body);font-size:13px}
 *{box-sizing:border-box}
 button,input,select{font:inherit;color:inherit}

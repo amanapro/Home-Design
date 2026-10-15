@@ -16,12 +16,15 @@
         "height": 900,
         "minWidth": 900,
         "minHeight": 600,
-        "center": true
+        "center": true,
+        "zoomHotkeysEnabled": true
       }
     ],
     "security": {
       "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost",
-      "dangerousDisableAssetCspModification": ["style-src"]
+      "dangerousDisableAssetCspModification": [
+        "style-src"
+      ]
     }
   },
   "bundle": {
@@ -38,7 +41,9 @@
       "icons/icon.ico"
     ],
     "windows": {
-      "webviewInstallMode": { "type": "downloadBootstrapper" }
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
     },
     "android": {
       "minSdkVersion": 26

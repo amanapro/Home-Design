@@ -1686,6 +1686,10 @@ planCv.addEventListener('wheel',e=>{e.preventDefault();const sp=evPoint(e);
   if(pinch||mouseWheel){const k=Math.exp(-clamp(e.deltaY,-60,60)*(pinch?0.01:0.0015));const w=toW(sp);view.s=clamp(view.s*k,0.008,3);view.ox=sp[0]-w[0]*view.s;view.oy=sp[1]-w[1]*view.s;}
   else{view.ox-=e.deltaX;view.oy-=e.deltaY;}dirty();},{passive:false});
 
+// The desktop app lets pinch gestures through to the page (so two-finger pinch on a touchpad or touch screen zooms the plan);
+// stop them, and Ctrl +/-/0, from zooming the whole app instead.
+window.addEventListener('wheel',e=>{if(e.ctrlKey)e.preventDefault();},{passive:false});
+window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&!e.altKey&&['+','=','-','_','0'].includes(e.key))e.preventDefault();},true);
 function zoomPlan(k,sp){const r=planCv.getBoundingClientRect();sp=sp||[r.width/2,r.height/2];const w=toW(sp);view.s=clamp(view.s*k,0.008,3);view.ox=sp[0]-w[0]*view.s;view.oy=sp[1]-w[1]*view.s;dirty();}
 {let g0=null;planCv.addEventListener('gesturestart',e=>{e.preventDefault();g0={s:view.s};});
   planCv.addEventListener('gesturechange',e=>{e.preventDefault();if(!g0)return;const r=planCv.getBoundingClientRect();zoomPlan(g0.s*e.scale/view.s,[e.clientX-r.left,e.clientY-r.top]);});
