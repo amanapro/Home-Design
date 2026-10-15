@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Main window: native open/save dialogs, and reading/writing the project, AutoCAD, PDF and image files the user picks in them. Bluetooth for the laser measure. Exiting after the save-before-exit question.",
+  "description": "Main window: native open/save dialogs, and reading/writing the project, AutoCAD, PDF and image files the user picks in them. Bluetooth for the laser measure. Re-opening the last saved project on the next start. Exiting after the save-before-exit question.",
   "windows": [
     "main"
   ],
@@ -13,6 +13,17 @@
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
     "fs:allow-write-file",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "**"
+        }
+      ]
+    },
     "blec:default",
     "process:allow-exit",
     "core:window:allow-destroy",

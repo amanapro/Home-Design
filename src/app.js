@@ -2319,10 +2319,14 @@ function toDXF(opts){
   return [...H,...T,'0','SECTION','2','BLOCKS','0','ENDSEC','0','SECTION','2','ENTITIES',...E,'0','ENDSEC','0','EOF'].join('\r\n')+'\r\n';}
 
 /* ============================== modal ============================== */
-function openModal(title,text,area,buttons,bodyNode,wide){delete $('#modal').dataset.exit;$('#modalTitle').textContent=title;$('#modalText').textContent=text;const ta=$('#modalArea');ta.hidden=area==null;if(area!=null)ta.value=area;
+// askModal: a question that waits for the answer (null when the dialog is dismissed with Esc / back)
+let modalResolve=null;
+function askModal(title,text,buttons,body,wide){return new Promise(res=>{openModal(title,text,null,buttons.map(b=>({label:b.label,primary:b.primary,fn:()=>modalPick(b.value)})),body,wide);modalResolve=res;});}
+function modalPick(v){const r=modalResolve;modalResolve=null;closeModal();if(r)r(v);}
+function openModal(title,text,area,buttons,bodyNode,wide){if(modalResolve){const r=modalResolve;modalResolve=null;r(null);}delete $('#modal').dataset.exit;$('#modalTitle').textContent=title;$('#modalText').textContent=text;const ta=$('#modalArea');ta.hidden=area==null;if(area!=null)ta.value=area;
   const mb=$('#modalBody');mb.innerHTML='';if(bodyNode)mb.appendChild(bodyNode);mb.hidden=!bodyNode;$('#modal .card').classList.toggle('wide',!!wide);
   const bb=$('#modalBtns');bb.innerHTML='';buttons.forEach(b=>{const e=document.createElement('button');e.className='btn'+(b.primary?' primary':'');e.textContent=b.label;e.onclick=()=>b.fn(e);bb.appendChild(e);});$('#modal').hidden=false;bb.lastChild&&bb.lastChild.focus();}
-function closeModal(){$('#modal').hidden=true;$('#modalBody').innerHTML='';delete $('#modal').dataset.exit;}
+function closeModal(){$('#modal').hidden=true;$('#modalBody').innerHTML='';delete $('#modal').dataset.exit;if(modalResolve){const r=modalResolve;modalResolve=null;r(null);}}
 function copyText(s,btn){const done=()=>{btn.textContent='Copied';setTimeout(()=>btn.textContent='Copy',1600);};
   try{navigator.clipboard.writeText(s).then(done,()=>{$('#modalArea').hidden=false;$('#modalArea').value=s;$('#modalArea').select();btn.textContent='Press Ctrl+C';});}catch(e){$('#modalArea').select();}}
 $('#csvBtn').onclick=e=>{const s=takeoffCSV();const b=e.currentTarget;try{navigator.clipboard.writeText(s).then(()=>{b.textContent='Copied';setTimeout(()=>b.textContent='Copy as CSV',1600);},()=>openModal('Takeoff CSV','Select all and copy.',s,[{label:'Close',fn:closeModal}]));}catch(err){openModal('Takeoff CSV','Select all and copy.',s,[{label:'Close',fn:closeModal}]);}};
@@ -2344,20 +2348,26 @@ async function openProjectFile(){
     const path=typeof sel==='string'?sel:(sel.path||sel.uri||String(sel));return {path,text:await TAURI.fs.readTextFile(path)};}
   return new Promise(res=>{const inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';inp.onchange=()=>{const f=inp.files[0];if(!f)return res(null);f.text().then(t=>res({path:null,text:t}));};inp.click();});}
 function projectJSON(){return JSON.stringify({app:'benchmark-planner',version:1,units,model:M,reference:refDrawing||undefined,refImage:refImage||undefined});}
-function markSaved(){if(!activeTab)return;activeTab.savedSnap=snapshot();activeTab.lastSaved=Date.now();activeTab.filePath=filePath;activeTab.stored=false;saveTabsNow();renderTabs();}
+function markSaved(){if(!activeTab)return;activeTab.savedSnap=snapshot();activeTab.lastSaved=Date.now();activeTab.filePath=filePath;activeTab.stored=false;saveTabsNow();renderTabs();recordLast(activeTab);}
+// "Kitchen plan.bench.json" -> "Kitchen plan" (null when the path has no readable file name, e.g. an Android content id)
+function fileProjName(p){const b=baseName(p||'');if(!/\.json$/i.test(b))return null;const n=b.replace(/\.bench\.json$/i,'').replace(/\.json$/i,'').trim();return n||null;}
+// the last project worked on, offered as "Continue" the next time the app starts
+function recordLast(t){if(!t||tabIsBlank(t))return;if(t===activeTab)storeActive();const rec={name:t.M.name||'Untitled project',filePath:t.filePath||null,savedAt:t.lastSaved||Date.now(),data:JSON.parse(tabJSON(t))};
+  try{localStorage.setItem('bm-last',JSON.stringify(rec));}catch(e){try{delete rec.data.refImage;localStorage.setItem('bm-last',JSON.stringify(rec));}catch(_){}}}
+function lastRecord(){try{const r=JSON.parse(localStorage.getItem('bm-last')||'null');return r&&r.data&&r.data.model&&Array.isArray(r.data.model.walls)?r:null;}catch(e){return null;}}
 async function saveProject(as){
   try{const text=projectJSON();
     if(NATIVE&&filePath&&!as){await TAURI.fs.writeTextFile(filePath,text);markSaved();toast('Saved '+baseName(filePath));return true;}
-    const p=await saveTextFile(safeName(M.name)+'.bench.json',text,'Benchmark project',['json']);if(p){if(NATIVE)filePath=p;markSaved();toast('Saved '+baseName(p));return true;}return false;}
+    const p=await saveTextFile(safeName(M.name)+'.bench.json',text,'Benchmark project',['json']);if(p){if(NATIVE){filePath=p;const nm=fileProjName(p);if(nm&&nm!==M.name){M.name=nm;$('#projName').value=nm;try{await TAURI.fs.writeTextFile(p,projectJSON());}catch(e){}}}markSaved();toast('Saved '+baseName(p));return true;}return false;}
   catch(err){toast('Could not save: '+err);return false;}}
 async function openProject(){
   try{const f=await openProjectFile();if(!f)return;const o=JSON.parse(f.text);const m=o&&o.model;
     if(!m||!Array.isArray(m.walls)||!Array.isArray(m.items)||!Array.isArray(m.openings))throw new Error('this is not a Benchmark project file');
     // opens in its own tab, unless this tab is still empty
     const already=f.path&&tabs.find(t=>t.filePath===f.path);if(already){switchTab(already.id);toast(baseName(f.path)+' is already open.');return;}
-    storeActive();const t=makeTab(Object.assign(blankModel(),m),{units:normUnits(o.units||units),ref:o.reference||null,img:o.refImage||null,filePath:NATIVE?f.path:null,lastSaved:Date.now()});
+    storeActive();const fm=Object.assign(blankModel(),m);if(!m.name||m.name==='Untitled project'){const nm=fileProjName(f.path);if(nm)fm.name=nm;}const t=makeTab(fm,{units:normUnits(o.units||units),ref:o.reference||null,img:o.refImage||null,filePath:NATIVE?f.path:null,lastSaved:Date.now()});
     t.savedSnap=JSON.stringify(t.M);if(activeTab&&tabIsBlank(activeTab)&&!tabDirty(activeTab)){const i=tabs.indexOf(activeTab);tabs.splice(i,1,t);try{localStorage.removeItem('bm-tab-'+activeTab.id);}catch(e){}}else tabs.push(t);
-    activate(t,true);saveTabsNow();toast('Opened '+(f.path?baseName(f.path):M.name));}
+    activate(t,true);saveTabsNow();recordLast(t);toast('Opened '+(f.path?baseName(f.path):M.name));}
   catch(err){toast('Could not open: '+(err.message||err));}}
 
 
@@ -2728,10 +2738,11 @@ function activate(t,fitIt){if(typeof walk!=='undefined'&&walk.on)walkStop();acti
 function switchTab(id){if(activeTab&&activeTab.id===id)return;const t=tabs.find(x=>x.id===id);if(!t)return;closeTextEditor&&closeTextEditor(false);storeActive();saveTabsNow();activate(t);}
 function newTab(model,o){storeActive();const t=makeTab(model,o);t.savedSnap=JSON.stringify(t.M);tabs.push(t);activate(t,true);saveTabsNow();return t;}
 const tabIsBlank=t=>!t.filePath&&!t.M.walls.length&&!t.M.items.length&&!(t.M.areas||[]).length&&!(t.M.texts||[]).length&&!t.ref&&!t.img;
+function dropTab(t){const i=tabs.indexOf(t);if(i<0)return;const was=t===activeTab;tabs.splice(i,1);try{localStorage.removeItem('bm-tab-'+t.id);}catch(e){}
+  if(!tabs.length){tabs.push(makeTab(blankModel()));tabs[0].savedSnap=JSON.stringify(tabs[0].M);}
+  if(was)activate(tabs[Math.min(i,tabs.length-1)],false);else renderTabs();saveTabsNow();}
 async function closeTab(id){const t=tabs.find(x=>x.id===id);if(!t)return;if(t===activeTab)storeActive();
-  const go=()=>{const i=tabs.indexOf(t);tabs.splice(i,1);try{localStorage.removeItem('bm-tab-'+t.id);}catch(e){}
-    if(!tabs.length){tabs.push(makeTab(blankModel()));tabs[0].savedSnap=JSON.stringify(tabs[0].M);}
-    if(t===activeTab)activate(tabs[Math.min(i,tabs.length-1)],false);else renderTabs();saveTabsNow();};
+  const go=()=>dropTab(t);
   if(!tabDirty(t)||tabIsBlank(t)){go();return;}
   if(t!==activeTab)switchTab(t.id);
   openModal('Save changes to “'+(t.M.name||'Untitled project')+'”?','If you close it without saving, the changes since it was last saved are lost.',null,[
@@ -2749,7 +2760,7 @@ function updateAutosaveNote(){const n=$('#autosv');if(!n)return;const t=activeTa
   n.textContent=!autosaveOn?'Autosave off':t.filePath&&NATIVE?(tm?'Saved '+tm+' · autosave every 5 min':'Autosave every 5 min'):'Kept on this device · save to a file to autosave it';}
 // keep every tab on this device (quietly drops the imported picture if storage is full)
 let tabSaveTimer=0;
-function saveTabsNow(){clearTimeout(tabSaveTimer);if(!activeTab)return;storeActive();
+function saveTabsNow(){clearTimeout(tabSaveTimer);if(!activeTab||bootPending)return;storeActive();
   try{localStorage.setItem('bm-tabs',JSON.stringify({active:activeTab.id,ids:tabs.map(t=>t.id),seq:tabSeq,snap:snapOn,free:freeMove}));}catch(e){}
   tabs.forEach(t=>{if(t!==activeTab&&t.stored)return;const meta={filePath:t.filePath,dirty:tabDirty(t),lastSaved:t.lastSaved};
     try{localStorage.setItem('bm-tab-'+t.id,JSON.stringify(Object.assign(JSON.parse(tabJSON(t)),meta)));t.stored=true;}
@@ -2761,14 +2772,16 @@ function loadTabs(){try{const ix=JSON.parse(localStorage.getItem('bm-tabs')||'nu
       t.savedSnap=o.dirty?null:JSON.stringify(t.M);tabs.push(t);}catch(e){}});
     if(!tabs.length)return false;activeTab=tabs.find(t=>t.id===ix.active)||tabs[0];return true;}catch(e){return false;}}
 // older versions kept one drawing; bring it in as the first tab
-let firstRun=false;
+// Every start begins with the start question. Until it is answered the tabs of the last session stay untouched in storage,
+// so "Recover unsaved work" still has them even if the app is closed while the question is up.
+let firstRun=false,bootPending=false,prevTabs=[],prevIds=[];
 function migrateOld(){let m=null,u=units;try{const s=localStorage.getItem('bm-plan');if(s){const o=JSON.parse(s);if(o&&o.M&&Array.isArray(o.M.walls)){m=o.M;u=normUnits(o.units);snapOn=o.snapOn!==false;freeMove=!!o.freeMove;}}}catch(e){}
   let ref=null,img=null;try{ref=JSON.parse(localStorage.getItem('bm-ref')||'null');}catch(e){}try{img=JSON.parse(localStorage.getItem('bm-refimg')||'null');}catch(e){}
   const t=makeTab(m?Object.assign(blankModel(),m):blankModel(),{units:u,ref,img});t.savedSnap=m?null:JSON.stringify(t.M);tabs.push(t);activeTab=t;if(!m)firstRun=true;
   try{['bm-plan','bm-ref','bm-refimg'].forEach(k=>localStorage.removeItem(k));}catch(e){}}
 async function autosaveTick(){if(!autosaveOn)return;storeActive();const now=Date.now();
   for(const t of tabs){if(!tabDirty(t)||now-(t.lastAuto||0)<AUTOSAVE_MS)continue;t.lastAuto=now;
-    if(NATIVE&&t.filePath){try{await TAURI.fs.writeTextFile(t.filePath,tabJSON(t));t.savedSnap=JSON.stringify(t.M);t.lastSaved=Date.now();}catch(e){toast('Autosave failed for '+(t.M.name||'project')+': '+e);}}}
+    if(NATIVE&&t.filePath){try{await TAURI.fs.writeTextFile(t.filePath,tabJSON(t));t.savedSnap=JSON.stringify(t.M);t.lastSaved=Date.now();if(t===activeTab)recordLast(t);}catch(e){toast('Autosave failed for '+(t.M.name||'project')+': '+e);}}}
   saveTabsNow();renderTabs();}
 setInterval(autosaveTick,30*1000);
 function newProjectDialog(){openModal('New project','Opens in a new tab. Your other projects stay open.',null,[
@@ -3870,18 +3883,36 @@ function loop(){if(needDraw){needDraw=false;drawPlan();drawElev();}requestAnimat
 // Exiting asks to save projects with unsaved changes; with nothing unsaved it just asks "are you sure?".
 let exiting=false;
 const unsavedTabs=()=>{storeActive();return tabs.filter(t=>tabDirty(t)&&!tabIsBlank(t));};
-async function reallyExit(){exiting=true;try{saveTabsNow();}catch(e){}
+// Exiting always ends the session: next time the app starts with the start question (Continue / Blank / Example / Open).
+async function reallyExit(){exiting=true;
+  try{const ks=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith('bm-tab-'))ks.push(k);}ks.forEach(k=>localStorage.removeItem(k));localStorage.removeItem('bm-tabs');}catch(e){}
   if(TAURI){try{if(TAURI.process&&TAURI.process.exit){await TAURI.process.exit(0);return;}}catch(e){}
     try{await TAURI.core.invoke('plugin:process|exit',{code:0});return;}catch(e){}
     try{await TAURI.window.getCurrentWindow().destroy();return;}catch(e){}}
   else{try{history.go(-2);}catch(e){}setTimeout(()=>{try{window.close();}catch(e){}},300);}}
-async function saveAllAndExit(list){for(const t of list){if(t!==activeTab)switchTab(t.id);const ok=await saveProject(false);if(!ok){toast('Not saved, so the app stays open.');return;}}reallyExit();}
-function exitDialog(){if(!$('#modal').hidden&&$('#modal').dataset.exit)return;const list=unsavedTabs();
-  if(list.length){const names=list.map(t=>'“'+(t.M.name||'Untitled project')+'”').join(', ');
-    openModal('Save your work before you exit?',(list.length>1?'These projects have':'This project has')+' changes that aren’t saved to a file yet: '+names+'.',null,
-      [{label:'Cancel',fn:closeModal},{label:'Exit without saving',fn:()=>{closeModal();reallyExit();}},{label:list.length>1?'Save all and exit':'Save and exit',primary:true,fn:()=>{closeModal();saveAllAndExit(list);}}]);}
-  else openModal('Exit Benchmark Planner?','Are you sure you want to exit?',null,[{label:'Cancel',fn:closeModal},{label:'Exit',primary:true,fn:()=>{closeModal();reallyExit();}}]);
-  $('#modal').dataset.exit='1';}
+const tabName=t=>t.M.name||'Untitled project';
+const keepAsLast=t=>t&&tabs.includes(t)&&!tabIsBlank(t)&&!tabDirty(t)&&(t.filePath||t.lastSaved);
+// 1) autosave (when on) quietly writes projects that already have a file, 2) each project still unsaved is asked about
+// one at a time and its tab closed after the answer, 3) with nothing to ask, a plain "exit?" (saying the work is saved).
+let exitBusy=false;
+async function exitDialog(){if(exitBusy||exiting)return;exitBusy=true;
+  try{storeActive();const lastT=activeTab;let auto=0;
+    if(autosaveOn&&NATIVE){for(const t of tabs){if(!tabDirty(t)||tabIsBlank(t)||!t.filePath)continue;
+      try{await TAURI.fs.writeTextFile(t.filePath,tabJSON(t));t.savedSnap=JSON.stringify(t.M);t.lastSaved=Date.now();auto++;}catch(e){}}
+      if(auto){saveTabsNow();renderTabs();}}
+    const list=unsavedTabs();if(list.includes(lastT)){list.splice(list.indexOf(lastT),1);list.push(lastT);}
+    for(let i=0;i<list.length;i++){const t=list[i];if(!tabs.includes(t))continue;if(t!==activeTab)switchTab(t.id);
+      const ans=await askModal('Save changes to “'+tabName(t)+'”?',(list.length>1?'Project '+(i+1)+' of '+list.length+'. ':'')+'It has changes that aren’t saved to a file yet. If you exit without saving, they are lost.',
+        [{label:'Cancel',value:null},{label:'Don’t save',value:'no'},{label:'Save',value:'save',primary:true}]);
+      if(!ans){toast('Exit cancelled.');return;}
+      if(ans==='save'){const ok=await saveProject(false);if(!ok){toast('Not saved, so the app stays open.');return;}}
+      if(t===lastT&&ans==='save')recordLast(t);
+      if(i<list.length-1)dropTab(t);}
+    if(!list.length){const msg=auto?'Your work was saved automatically.':tabs.some(t=>!tabIsBlank(t))?'All your work is saved.':'Are you sure you want to exit?';
+      const ok=await askModal('Exit Benchmark Planner?',msg,[{label:'Cancel',value:null},{label:'Exit',value:true,primary:true}]);if(!ok)return;}
+    if(keepAsLast(lastT))recordLast(lastT);
+    reallyExit();}
+  finally{exitBusy=false;}}
 function handleBack(){
   if(!$('#modal').hidden){closeModal();return;}
   if(document.getElementById('doorPick')){closeDoorPick();return;}
@@ -3907,19 +3938,45 @@ function wireExit(){
 /* ============================== first start: blank page or the example ============================== */
 function startWith(example){const t=activeTab;if(example){t.M=sampleModel();t.undo=[];t.redo=[];activate(t,true);t.savedSnap=snapshot();renderTabs();saveTabsNow();toast('This is an example flat. Change anything, or press + for a new project.');}
   else toast('Pick Wall (W) and click to start drawing.');}
-function welcomeDialog(){const body=document.createElement('div');body.className='welcome';
-  body.innerHTML=`<button type="button" class="wcard" id="wBlank"><span class="wimg"><svg viewBox="0 0 64 48" aria-hidden="true"><rect x="6" y="5" width="52" height="38" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M26 24h12M32 18v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="wtx"><b>Blank page</b><span>Start a new plan from scratch.</span></span></button>
-    <button type="button" class="wcard" id="wExample"><span class="wimg"><svg viewBox="0 0 64 48" aria-hidden="true"><rect x="6" y="5" width="52" height="38" rx="2" fill="none" stroke="currentColor" stroke-width="3"/><path d="M28 5v24M6 29h22M28 22h30" stroke="currentColor" stroke-width="2.4"/><rect x="10" y="9" width="7" height="6" fill="currentColor" opacity=".35"/><rect x="10" y="33" width="14" height="6" rx="2" fill="currentColor" opacity=".35"/></svg></span><span class="wtx"><b>Start with an example</b><span>A small flat with a kitchen, bathroom and living room to explore.</span></span></button>`;
-  openModal('Welcome to Benchmark Planner','How would you like to start?',null,[{label:'Open a project file…',fn:()=>{closeModal();openProject();}}],body);
-  $('#wBlank').onclick=()=>{closeModal();startWith(false);};$('#wExample').onclick=()=>{closeModal();startWith(true);};$('#wBlank').focus();}
+// the answer to the start question: bring back the last session's tabs, or let them go
+function finishBoot(recover){if(!bootPending)return;bootPending=false;
+  if(recover&&prevTabs.length){tabs.length=0;prevTabs.forEach(t=>{t.stored=false;tabs.push(t);});activate(tabs.find(t=>t.wasActive)||tabs[0],true);}
+  try{prevIds.forEach(id=>{if(!tabs.some(t=>t.id===id))localStorage.removeItem('bm-tab-'+id);});}catch(e){}
+  prevTabs=[];saveTabsNow();renderTabs();}
+async function continueLast(){const L=lastRecord();if(!L)return;let o=null;
+  if(NATIVE&&L.filePath){try{const x=JSON.parse(await TAURI.fs.readTextFile(L.filePath));if(x&&x.model&&Array.isArray(x.model.walls)&&Array.isArray(x.model.items))o=x;}catch(e){}}
+  if(!o)o=L.data;const m=Object.assign(blankModel(),o.model);if(!o.model.name||o.model.name==='Untitled project')m.name=L.name||m.name;
+  const t=makeTab(m,{units:normUnits(o.units||units),ref:o.reference||null,img:o.refImage||null,filePath:NATIVE?(L.filePath||null):null,lastSaved:L.savedAt||Date.now()});
+  t.savedSnap=JSON.stringify(t.M);const old=activeTab;if(old&&tabIsBlank(old)&&!tabDirty(old)){tabs.splice(tabs.indexOf(old),1,t);try{localStorage.removeItem('bm-tab-'+old.id);}catch(e){}}else tabs.push(t);
+  activate(t,true);saveTabsNow();toast('Continuing “'+m.name+'”'+(L.filePath?' ('+baseName(L.filePath)+')':''));}
+function whenText(ms){if(!ms)return '';const d=new Date(ms),now=new Date();const tm=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+  if(d.toDateString()===now.toDateString())return 'today, '+tm;const y=new Date(now);y.setDate(now.getDate()-1);if(d.toDateString()===y.toDateString())return 'yesterday, '+tm;
+  return d.toLocaleDateString([],{day:'numeric',month:'short',year:d.getFullYear()===now.getFullYear()?undefined:'numeric'})+', '+tm;}
+async function welcomeDialog(){const L=lastRecord();const rec=prevTabs.filter(t=>t.savedSnap!==JSON.stringify(t.M));
+  const body=document.createElement('div');body.className='welcome';
+  const card=(id,svg,title,sub)=>`<button type="button" class="wcard" id="${id}"><span class="wimg"><svg viewBox="0 0 64 48" aria-hidden="true">${svg}</svg></span><span class="wtx"><b>${title}</b><span>${sub}</span></span></button>`;
+  body.innerHTML=(L?card('wLast','<path d="M10 8h28l12 10v24H10z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M38 8v10h12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M22 30l6 6 12-12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>',
+      'Continue “'+esc(L.name)+'”','The last project you worked on'+(L.filePath?' — '+esc(baseName(L.filePath)):'')+(L.savedAt?'. Saved '+whenText(L.savedAt)+'.':'.')):'')
+    +(rec.length?card('wRecover','<path d="M14 24a18 18 0 1 0 6-13.4" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M12 6v9h9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 16v9l6 4" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>',
+      'Recover unsaved work','The app closed without exiting last time. Bring back '+(rec.length>1?rec.length+' projects with unsaved changes':'“'+esc(tabName(rec[0]))+'”, which has unsaved changes')+'.'):'')
+    +card('wBlank','<rect x="6" y="5" width="52" height="38" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M26 24h12M32 18v12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>','Blank page','Start a new plan from scratch.')
+    +card('wExample','<rect x="6" y="5" width="52" height="38" rx="2" fill="none" stroke="currentColor" stroke-width="3"/><path d="M28 5v24M6 29h22M28 22h30" stroke="currentColor" stroke-width="2.4"/><rect x="10" y="9" width="7" height="6" fill="currentColor" opacity=".35"/><rect x="10" y="33" width="14" height="6" rx="2" fill="currentColor" opacity=".35"/>','Start with an example','A small flat with a kitchen, bathroom and living room to explore.');
+  const pr=askModal(L?'Welcome back':'Welcome to Benchmark Planner','How would you like to start?',[{label:'Open a project file…',value:'open'}],body);
+  ['wLast','wRecover','wBlank','wExample'].forEach(id=>{const b=document.getElementById(id);if(b)b.onclick=()=>modalPick(id);});
+  (document.getElementById('wLast')||$('#wBlank')).focus();
+  const ans=await pr;finishBoot(ans==='wRecover');
+  if(ans==='wLast')continueLast();else if(ans==='wExample')startWith(true);else if(ans==='open')openProject();else if(ans==='wBlank')startWith(false);}
 
 /* boot */
 if(!loadTabs())migrateOld();
+// keep the last session's tabs aside (for "Recover unsaved work") and start on one blank page
+prevIds=tabs.map(t=>t.id);prevTabs=tabs.filter(t=>!tabIsBlank(t));prevTabs.forEach(t=>t.wasActive=t===activeTab);
+tabs.length=0;activeTab=makeTab(blankModel());activeTab.savedSnap=JSON.stringify(activeTab.M);tabs.push(activeTab);bootPending=true;
 M=activeTab.M;readColors();
 setSnap(snapOn);setFree(freeMove,true);setEmptyDrag(emptyDrag);setView('plan');setCut(true);
 activate(activeTab,true);syncAutosaveUI();
 if(three.ok){applyLook();syncWalkUI();}
-if(firstRun)setTimeout(welcomeDialog,300);
+setTimeout(welcomeDialog,300);
 $('#laserBtn').onclick=laserBtnClick;renderLaserBtn();$('#elecBtn').onclick=()=>{setElecLayer(!elecOn);toast(elecOn?'Electrical layer shown.':'Electrical layer hidden.');};setElecLayer(elecOn);$('#zoomIn').onclick=()=>zoomPlan(1.25);$('#zoomOut').onclick=()=>zoomPlan(0.8);wireExit();
 $('#detailsBtn').onclick=()=>setSheet(!$('#app').classList.contains('sheet'));$('#sheetClose').onclick=()=>setSheet(false);$('#sheetGrip').onclick=()=>setSheet(false);
 requestAnimationFrame(()=>{fit();frame3d();build3d();loop();});
