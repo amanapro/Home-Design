@@ -229,7 +229,7 @@ function sampleModel(){
   return {name:'Flat 4B — kitchen & bath renovation',walls,openings,items,
     roomMeta:[{x:1500,y:1600,name:'Kitchen',type:'kitchen'},{x:1500,y:4300,name:'Bathroom',type:'bath'},{x:5100,y:2700,name:'Living',type:'living'}]};
 }
-function blankModel(){return {name:'Untitled project',walls:[],openings:[],items:[],roomMeta:[],dims:[],cols:[],arcs:[],areas:[],texts:[]};}
+function blankModel(){return {name:'Untitled project',walls:[],openings:[],items:[],roomMeta:[],dims:[],cols:[],arcs:[],areas:[],texts:[],elec:[]};}
 const wallById=id=>M.walls.find(w=>w.id===id);
 function wallLen(w){return dist(w.a,w.b);}
 function wallDir(w){return norm(sub(w.b,w.a));}
@@ -435,7 +435,7 @@ function undo(){if((tool==='erase'||eraseLastAll)&&eraseStack.length){eraseLastA
 function redo(){if(!redoStack.length)return;undoStack.push(snapshot());M=JSON.parse(redoStack.pop());fixUid();sel=null;changed();}
 // Next free id number across everything that has one, and repair any duplicate ids left by older versions
 // (they made two pillars or dimensions select as one).
-function fixUid(){const all=[M.walls,M.openings,M.items,M.cols,M.dims,M.arcs,M.areas,M.texts].filter(Array.isArray);let mx=0;
+function fixUid(){const all=[M.walls,M.openings,M.items,M.cols,M.dims,M.arcs,M.areas,M.texts,M.elec].filter(Array.isArray);let mx=0;
   all.forEach(arr=>arr.forEach(o=>{const n=parseInt(String(o.id).slice(1));if(n>mx)mx=n;}));uid=mx+1;
   const seen=new Set(M.walls.map(w=>w.id));[M.openings,M.items,M.cols,M.dims].filter(Array.isArray).forEach(arr=>arr.forEach(o=>{
     if(seen.has(o.id))o.id=String(o.id).charAt(0)+(uid++);seen.add(o.id);}));}
@@ -537,6 +537,7 @@ let ptrTouch=false;
 function hitDim(p){const tol=(ptrTouch?14:7)/view.s;for(const d of (M.dims||[])){const c=segClosest(p,d.a,d.b);if(dist(p,c.q)<tol)return {kind:'dim',id:d.id};}return null;}
 function colRotHandle(c){const [,hy]=colHalf(c);return add([c.x,c.y],rotV([0,-(hy+28/view.s)],c.r||0));}
 function hitTest(p){
+  {const he=hitElec(p);if(he)return he;}
   {const hr=hitRoomHandles(p);if(hr)return hr;}
   {const ht=hitText(p);if(ht)return ht;}
   {const ha=hitArea(p);if(ha&&(ha.kind!=='area'||areaLabelHit(p,ha.id)))return ha;}
@@ -615,6 +616,7 @@ function drawPlan(){
   // room labels
   rooms.forEach(drawRoomLabel);
   drawTexts();
+  drawElecLayer();
   // elevation markers for the room shown in the elevation pane
   if(!EXP&&isElevView()){const r=elevRoom();if(r){ctx.strokeStyle=C.accent;ctx.lineWidth=1.5;ctx.setLineDash([6,4]);ctx.beginPath();r.net.forEach((p,i)=>{const q=toS(p);i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]);});ctx.closePath();ctx.stroke();ctx.setLineDash([]);
     r.elevs.forEach(e=>{const c=toS(add(e.mid,mul(e.nIn,Math.max(230,26/view.s))));const tip=toS(add(e.mid,mul(e.nIn,Math.max(40,4/view.s))));
@@ -767,7 +769,7 @@ function drawSnapMark(sn){if(!sn)return;const s=toS(sn.p);ctx.strokeStyle=C.snap
   else{ctx.moveTo(s[0]-5,s[1]);ctx.lineTo(s[0]+5,s[1]);ctx.moveTo(s[0],s[1]-5);ctx.lineTo(s[0],s[1]+5);}ctx.stroke();
   (sn.guides||[]).forEach(([a,b])=>{const sa=toS(a),sb=toS(b);ctx.setLineDash([3,4]);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(sa[0],sa[1]);ctx.lineTo(sb[0],sb[1]);ctx.stroke();ctx.setLineDash([]);});}
 function drawToolPreview(){
-  drawLaserMark();drawWalkMark();
+  drawLaserMark();drawWalkMark();drawElecTool();
   if(tool==='erase'){drawEraseOverlay();drawEraseCursor();}
   if(tool==='area')drawAreaTool();
   if(tool==='arcwall')drawArcTool();
@@ -826,7 +828,7 @@ function drawElev(){
   const cw=Math.round(W*dpr),ch=Math.round(Htot*dpr);if(elevCv.width!==cw)elevCv.width=cw;if(elevCv.height!==ch)elevCv.height=ch;
   ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle=C.paper;ctx.fillRect(0,0,W,Htot);
   if(!r){txt('Close a loop of walls to create a room, then its walls appear here.',[W/2,60],{color:C.muted,size:12.5});return;}
-  els.forEach((e,k)=>{const ox=pad+(k%cols)*(colW+gap),top=pad+Math.floor(k/cols)*(cellH+gap);drawElevation(e,r,ox,top+30+maxH*s,s);});
+  els.forEach((e,k)=>{const ox=pad+(k%cols)*(colW+gap),top=pad+Math.floor(k/cols)*(cellH+gap);drawElevation(e,r,ox,top+30+maxH*s,s);drawElevElec(e,ox,top+30+maxH*s,s);});
   }finally{ctx=keep;}}
 function drawElevation(e,r,ox,baseY,s){
   const X=x=>ox+x*s,Z=z=>baseY-z*s;
@@ -1278,8 +1280,8 @@ function drawPasteGhost(){if(!clip||!pasteOff)return;
   clip.dims.forEach(d=>drawMeasure(add(d.a,off),add(d.b,off),C.accent,{}));
   ctx.restore();const q=toS(add(clip.anchor,off));ctx.strokeStyle=C.snap;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(q[0]-7,q[1]);ctx.lineTo(q[0]+7,q[1]);ctx.moveTo(q[0],q[1]-7);ctx.lineTo(q[0],q[1]+7);ctx.stroke();}
 $('#pasteBtn').onclick=startPaste;
-function syncToolButtons(){document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===tool&&((b.dataset.kind||null)===((tool==='wall'||tool==='area')?placeType:(b.dataset.kind||null))))));}
-function setTool(t,type){if(t!==tool){closeTextEditor(false);ruler=null;arcDraw={a:null,b:null,s:0};areaDraw={pts:[],cur:null,snap:null};}tool=t;placeType=type||null;draw.start=null;ghost=null;hideLenbox();
+function syncToolButtons(){document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===tool&&((b.dataset.kind||null)===((tool==='wall'||tool==='area'||tool==='elec')?placeType:(b.dataset.kind||null))))));}
+function setTool(t,type){stripStart=null;elecGhost=null;if(t==='elec'&&!elecOn)setElecLayer(true);if(t!==tool){closeTextEditor(false);ruler=null;arcDraw={a:null,b:null,s:0};areaDraw={pts:[],cur:null,snap:null};}tool=t;placeType=type||null;draw.start=null;ghost=null;hideLenbox();
   syncToolButtons();
   document.querySelectorAll('.lib button[data-type]').forEach(b=>b.setAttribute('aria-pressed',String(t==='place'&&b.dataset.type===type)));
   $('#hint').innerHTML=HINTS[t]||'';$('#snapchip').textContent='';planCv.style.cursor=t==='select'?'default':'crosshair';
@@ -1352,6 +1354,7 @@ planCv.addEventListener('pointerdown',e=>{
   if(tool==='arcwall'){arcToolMove(p);arcToolClick(p);renderInspector();dirty();return;}
   if(tool==='area'){areaToolClick(p);return;}
   if(tool==='text'){textToolClick(p);return;}
+  if(tool==='elec'){elecToolClick(p);return;}
   if(tool==='erase'){eraseStart(p);planCv.setPointerCapture(e.pointerId);return;}
   if(tool==='column'&&colGhost&&colGhost.on){const c={id:nid('c'),x:Math.round(colGhost.x*10)/10,y:Math.round(colGhost.y*10)/10,r:colGhost.r,shape:colGhost.shape,w:colGhost.w,d:colGhost.d,h:colGhost.h,gap:colGhost.gap};
     if(colGhost.wall){c.wall=colGhost.wall;c.s=Math.round(colGhost.s*10)/10;c.off=Math.round(colGhost.off*10)/10;}
@@ -1375,6 +1378,7 @@ planCv.addEventListener('pointerdown',e=>{
     if(h.kind==='wall'){const w=wallById(h.id);drag.set=wallMoveSet(w);drag.a0=drag.set.a0;drag.b0=drag.set.b0;}
     if(h.kind==='end'){const w=wallById(h.id);drag.orig=w[h.end].slice();drag.links=[[w,h.end]].concat(connectedEnds(w,h.end));drag.ops=captureOpenings(drag.links.map(([o])=>o));}
     if(h.kind==='item'){const it=M.items.find(x=>x.id===h.id);drag.off=sub([it.x,it.y],p);}
+    if(h.kind==='elec')elecDragStart(drag,p);
     if(h.kind==='col'){const c=colById(h.id);drag.off=sub([c.x,c.y],p);}
     if(h.kind==='colrot'){sel={kind:'col',id:h.id};drag.r0=colById(h.id).r||0;}
     if(h.kind==='text'){const T=textById(h.id);drag.orig=[T.x,T.y];}
@@ -1420,6 +1424,7 @@ planCv.addEventListener('pointermove',e=>{
     if(drag.kind==='col'){const c=colById(drag.id);
       if(c.wall){const sl=hostSlot(add(p,drag.off),Object.assign({},c,{align:'keep'}),c.id);if(sl){if(sl.w.id!==c.wall)c.off=0;c.wall=sl.w.id;c.s=sl.s;if(sl.w.id===c.wall&&c.off==null)c.off=sl.off;syncHostedCols();drag.snap={kind:sl.kind};}drag.guides=[];}
       else{const sn=colSnap(c,add(p,drag.off),c.id);c.x=sn.c.x;c.y=sn.c.y;c.r=sn.c.r;drag.snap={kind:sn.kind};drag.guides=sn.guides;}}
+    if(drag.kind==='elec')elecDragMove(drag,p);
     if(drag.kind==='item'){const it=M.items.find(x=>x.id===drag.id);const target=add(p,drag.off);const r=fixtureSnap(target,it);it.x=r.x;it.y=r.y;if(r.snapped)it.r=r.r;}
     if(drag.kind==='opening'){const o=M.openings.find(x=>x.id===drag.id);let w=nearestWall(p,24)||wallById(o.wall);const sl=openingSlot(p,w,o.w)||openingSlotLoose(p,w,o.w);if(sl){o.wall=w.id;o.s=sl.s;}}
     $('#snapchip').textContent=drag.snap&&drag.snap.kind!=='free'&&drag.snap.kind!=='angle'?drag.snap.kind:'';
@@ -1622,6 +1627,7 @@ function drawMeasure(a,b,color,opts={}){
 function keepRuler(){if(!ruler||!ruler.b||dist(ruler.a,ruler.b)<1)return;const d={id:nid('m'),a:ruler.a.map(v=>Math.round(v*10)/10),b:ruler.b.map(v=>Math.round(v*10)/10)};
   mutate(()=>M.dims.push(d));ruler=null;renderInspector();dirty();toast('Kept as a dimension. Select it with the Pointer to delete it.');}
 function updatePreview(p){
+  if(tool==='elec'){elecToolMove(p);return;}
   if(tool==='area'){areaToolMove(p);dirty();}
   if(tool==='arcwall'){arcToolMove(p);if(arcDraw.b&&!lenbox.hidden)positionLenbox();dirty();}
   if(tool==='wall'){snapInfo=snapPoint(p,draw.start);$('#snapchip').textContent=snapInfo.kind==='free'?'':snapInfo.kind;
@@ -1715,6 +1721,7 @@ window.addEventListener('keydown',e=>{
   if(tool==='area'&&areaDraw.pts.length){if(k==='enter'){e.preventDefault();finishArea();return;}if(k==='escape'){areaDraw={pts:[],cur:null,snap:null};renderInspector();dirty();return;}
     if(k==='backspace'){e.preventDefault();areaDraw.pts.pop();renderInspector();dirty();return;}}
   if(k==='escape'&&tool==='ruler'&&ruler){ruler=null;renderInspector();dirty();return;}
+  if(k==='escape'&&tool==='elec'&&stripStart){stripStart=null;elecGhost=null;renderInspector();dirty();return;}
   if(k==='escape'&&laser.picking){laser.picking=false;$('#hint').innerHTML=HINTS[tool]||'';toast('Laser reading cancelled.');return;}
   if(k==='escape'){if(tool==='wall'&&draw.start){draw.start=null;draw.chainStart=null;}else{setTool('select');sel=null;renderInspector();}dirty();return;}
   if(k==='c')setTool('column');else if(k==='v')setTool('select');else if(k==='w')setTool('wall');else if(k==='d')setDoorType(doorType);else if(k==='n')setTool('window');else if(k==='l')setTool('ruler');else if(k==='a')setTool('arcwall');else if(k==='g')setTool('area');else if(k==='e'){if((refImage||refDrawing)&&refLeftover)setTool('erase');}else if(k==='t')setTool('text');
@@ -1740,14 +1747,15 @@ function nudge(v,mult){
   if(did){if(newBurst)pushUndo(before);changed();}
   if(msg){$('#snapchip').textContent=msg;clearTimeout(nudge.t);nudge.t=setTimeout(()=>$('#snapchip').textContent='',1400);}}
 function deleteSel(){if(!sel)return;const s=sel;if(s.kind==='room'){const r=selRoom();if(r)deleteRoom(r);sel=null;renderInspector();return;}mutate(()=>{
-  if(s.kind==='arc'){const q=arcById(s.id);if(q){const ids=new Set(arcSegs(q).map(w=>w.id));M.walls=M.walls.filter(w=>!ids.has(w.id));M.openings=M.openings.filter(o=>!ids.has(o.wall));M.arcs=M.arcs.filter(x=>x!==q);}}
-  if(s.kind==='wall'||s.kind==='walls'){const ids=new Set(s.kind==='wall'?[s.id]:s.ids);M.walls=M.walls.filter(w=>!ids.has(w.id));M.openings=M.openings.filter(o=>!ids.has(o.wall));}
+  if(s.kind==='arc'){const q=arcById(s.id);if(q){const ids=new Set(arcSegs(q).map(w=>w.id));M.walls=M.walls.filter(w=>!ids.has(w.id));M.openings=M.openings.filter(o=>!ids.has(o.wall));M.arcs=M.arcs.filter(x=>x!==q);M.elec=(M.elec||[]).filter(e=>!ids.has(e.wall));}}
+  if(s.kind==='wall'||s.kind==='walls'){const ids=new Set(s.kind==='wall'?[s.id]:s.ids);M.walls=M.walls.filter(w=>!ids.has(w.id));M.openings=M.openings.filter(o=>!ids.has(o.wall));M.elec=(M.elec||[]).filter(e=>!ids.has(e.wall));}
   if(s.kind==='opening')M.openings=M.openings.filter(o=>o.id!==s.id);
   if(s.kind==='item')M.items=M.items.filter(o=>o.id!==s.id);
   if(s.kind==='dim')M.dims=M.dims.filter(o=>o.id!==s.id);
   if(s.kind==='area')M.areas=M.areas.filter(o=>o.id!==s.id);
   if(s.kind==='text')M.texts=M.texts.filter(o=>o.id!==s.id);
-  if(s.kind==='col')M.cols=M.cols.filter(o=>o.id!==s.id);});sel=null;renderInspector();}
+  if(s.kind==='col')M.cols=M.cols.filter(o=>o.id!==s.id);
+  if(s.kind==='elec')M.elec=(M.elec||[]).filter(o=>o.id!==s.id);});sel=null;renderInspector();}
 function updateCoords(){$('#coords').textContent='x '+fmtLen(cursor[0])+' · y '+fmtLen(-cursor[1]);}
 
 /* ============================== inspector & takeoff ============================== */
@@ -1784,6 +1792,7 @@ function renderInspector(){setTimeout(sheetFollowSel,0);
       $('#fpRound').onclick=()=>{f.shape='round';upd();};$('#fpRect').onclick=()=>{f.shape='rect';upd();};
       const onc=(id,mn,fn)=>{const e=document.getElementById(id);if(e)e.onchange=()=>{const x=parseLen(e.value);if(x>=mn)fn(x);upd();};};
       onc('fpR',100,x=>f.r=x);onc('fpW',200,x=>f.w=x);onc('fpD',200,x=>f.d=x);return;}
+    if(tool==='elec'){el.innerHTML=elecToolPanel();return;}
     if(tool==='door'){const slide=doorType!=='swing';el.innerHTML=`<p class="h">New door</p><div class="dcards" role="radiogroup" aria-label="Door type">${doorCards().replace(/menuitemradio/g,'radio')}</div><div class="kv">${field('Width','sdW',fmtLen(curDoorW()))}</div>
       <p class="tip">Click on a wall to place it. ${slide?'Arrows show which way the panels slide; change the side and direction afterwards in its side panel.':'Change the swing side and hinge afterwards in its side panel.'} Placed doors can switch type with <b>Type</b> in their side panel.</p>`;
       el.querySelectorAll('[data-dtype]').forEach(b=>b.onclick=()=>setDoorType(b.dataset.dtype));
@@ -1819,6 +1828,7 @@ function renderInspector(){setTimeout(sheetFollowSel,0);
     h=`<div class="selname">${o.kind==='door'?(isSliding(o)?'Sliding door':'Door'):'Window'} <span class="selbtns"><button class="btn" id="copyBtn" title="Copy (Ctrl+C), then paste with Ctrl+V">Copy</button><button class="btn" id="delBtn">Delete</button></span></div><div class="kv">
       ${field('Width','oW',fmtLen(o.w))}${field('Height','oH',fmtLen(o.h))}${o.kind==='window'?field('Sill height','oSill',fmtLen(o.sill)):''}
       ${field('From face','oOff',fmtLen(o.s-o.w/2-ext[0]))}${o.kind==='door'?selectField('Type','oStyle',DOORSTYLES,o.style||'swing'):''}</div>${o.kind==='door'?(o.style==='slide2'?'':`<div class="rowbtns"><button class="btn" id="flipBtn">${isSliding(o)?'Other side of the wall':'Flip swing side'}</button><button class="btn" id="hingeBtn">${isSliding(o)?'Slide the other way':'Swap hinge'}</button></div>`):''}`;}
+  if(sel.kind==='elec'){const E=elecById(sel.id);if(!E){sel=null;return renderInspector();}h=elecPanelHTML(E,field);}
   if(sel.kind==='item'){const it=M.items.find(x=>x.id===sel.id);if(!it){sel=null;return renderInspector();}
     h=`<div class="selname">${CAT[it.type].label} <span class="selbtns"><button class="btn" id="copyBtn" title="Copy (Ctrl+C), then paste with Ctrl+V">Copy</button><button class="btn" id="delBtn">Delete</button></span></div><div class="kv">
       ${it.type==='firepit'?`<label>Shape</label><div class="seg" role="group" aria-label="Fire pit shape"><button id="fpRound" aria-pressed="${it.shape!=='rect'}">Circular</button><button id="fpRect" aria-pressed="${it.shape==='rect'}">Rectangular</button></div>`:''}
@@ -1926,6 +1936,7 @@ function bindInspector(){
     on('oOff',v=>{const x=parseLen(v);if(x>=0)mutate(()=>o.s=clamp(ext[0]+x+o.w/2,ext[0]+o.w/2,L-ext[1]-o.w/2));renderInspector();});
     {const st=$('#oStyle');if(st)st.onchange=()=>{mutate(()=>{if(st.value==='swing')delete o.style;else o.style=st.value;});renderInspector();};}
     const fb=$('#flipBtn');if(fb)fb.onclick=()=>mutate(()=>o.flip^=1);const hb=$('#hingeBtn');if(hb)hb.onclick=()=>mutate(()=>o.hinge^=1);}
+  if(sel&&sel.kind==='elec'){const E=elecById(sel.id);if(E)bindElecPanel(E);}
   if(sel&&sel.kind==='item'){const it=M.items.find(x=>x.id===sel.id);
     const setDim=(k,v,min)=>{const x=len(v,min);if(x!==null)mutate(()=>{
       if(k==='d'){const back=add([it.x,it.y],rotV([0,-it.d/2],it.r));it.d=x;const c=add(back,rotV([0,x/2],it.r));it.x=c[0];it.y=c[1];}else it[k]=x;});renderInspector();};
@@ -1971,7 +1982,7 @@ function renderTakeoff(){
   if((M.cols||[]).length)s+=`<span>Columns</span><span>× ${M.cols.length}</span>`;
   {const yr=yardWallRuns();Object.keys(OUTW).forEach(k=>{if(yr[k])s+=`<span>${OUTW[k].label}</span><span>${fmtRun(yr[k])} ${runU()}</span>`;});}
   const run=M.items.filter(i=>COUNTER.has(i.type)).reduce((a,i)=>a+i.w,0);if(run)s+=`<span>Countertop run</span><span>${fmtRun(run)} ${runU()}</span>`;
-  $('#sched').innerHTML=s;}
+  s+=elecSchedule();$('#sched').innerHTML=s;}
 function takeoffCSV(){const rows=[['Room','Type','Floor ('+areaU()+')','Walls ('+areaU()+')','Wall tile ('+areaU()+')','Perimeter ('+runU()+')','Skirting ('+runU()+')']];
   rooms.forEach(r=>rows.push([r.name,ROOMTYPES[r.type],fmtArea(r.netArea),fmtArea(r.wallArea),fmtArea(r.tileArea),fmtRun(r.perimeter),fmtRun(r.skirting)]));
   (M.areas||[]).forEach(A=>{if(isZone(A)){const z=zoneStats(A);rows.push([A.name||'Area',ROOMTYPES[A.type]+' (area)',fmtArea(z.floor),fmtArea(z.wall),fmtArea(z.tile),fmtRun(z.per),fmtRun(z.skirt)]);return;}const st=areaStats(A);rows.push([A.name||'Area',A.surf&&SURF[A.surf]?SURF[A.surf].label:'Measured area',fmtArea(st.area),'','',fmtRun(st.per),'']);});
@@ -2263,6 +2274,13 @@ function toDXF(opts){
   (M.texts||[]).forEach(T=>{const L=textLines(T),lh=T.h*1.3;L.forEach((l,i)=>{if(!l.trim())return;const B=textBox(T);const c=mul(add(B[0],B[2]),.5);
       const p=add(c,rotV([0,(i-(L.length-1)/2)*lh],T.r||0));TEXT('A-ANNO-TEXT',p,T.h,l,-(T.r||0));});});
   M.walls.forEach(w=>{if(!w.kind)return;const ext=wallExt(w);wallPieces(w,ext).forEach(([s0,s1])=>{const q=pieceQuad(w,s0,s1);for(let i=0;i<4;i++)LINE('L-SITE-'+w.kind.toUpperCase(),q[i],q[(i+1)%4]);});});
+  if(opts.fixtures!==false)(M.elec||[]).forEach(E=>{const D=ELEC[E.type];if(!D)return;const L=D.group==='light'?'E-LITE':'E-POWR';
+    if(E.a){LINE(L,E.a,E.b);if(E.label)TEXT(L,add(mul(add(E.a,E.b),.5),[0,-120]),120,E.label,0);return;}
+    let c=elecPos(E);if(!c)return;if(E.wall){const P=elecWallPos(E);c=add(P.p,mul(P.n,120));}
+    const r=E.type==='chandelier'?250:E.type==='spot'?60:100;ARC(L,c,r,0,360);
+    if(E.type==='spot'||E.type==='garden'){const k=r*0.7;LINE(L,add(c,[-k,-k]),add(c,[k,k]));LINE(L,add(c,[-k,k]),add(c,[k,-k]));}
+    const tag={switch:'S'+((E.gangs||1)>1?E.gangs:''),dimmer:'SD',socket:E.dbl?'2P':'P',wpsocket:'WP',wall:'WL',chandelier:'CH'}[E.type];
+    if(tag||E.label)TEXT(L,add(c,[0,r+130]),110,(tag||'')+(E.label?' '+E.label:''),0);});
   const refLayers=[];
   if(opts.reference&&refDrawing){const R=refDrawing;const lname=i=>{const nm='REF-'+(i+1)+'-'+String(R.layers[i]||'').replace(/[^A-Za-z0-9_-]+/g,'').slice(0,20);if(!refLayers.includes(nm))refLayers.push(nm);return nm;};
     for(let i=0;i<R.sl.length;i++)LINE(lname(R.sl[i]),[R.segs[4*i],R.segs[4*i+1]],[R.segs[4*i+2],R.segs[4*i+3]]);
@@ -2275,7 +2293,7 @@ function toDXF(opts){
     '9','$INSUNITS','70',String(U.ins),'9','$MEASUREMENT','70',opts.unit==='in'?'0':'1','9','$LTSCALE','40','1','0','ENDSEC'];
   const dash=[60/f,-40/f];
   const layers=[['0',7,'CONTINUOUS'],['A-WALL',7,'CONTINUOUS'],['A-DOOR',3,'CONTINUOUS'],['A-GLAZ',4,'CONTINUOUS'],['A-FURN',8,'CONTINUOUS'],['A-FURN-UPPR',8,'DASHED'],
-    ['A-COLS',6,'CONTINUOUS'],['A-AREA-IDEN',2,'CONTINUOUS'],['A-ANNO-DIMS',1,'CONTINUOUS'],['A-AREA-MEAS',30,'CONTINUOUS'],['L-SITE-FENCE',32,'CONTINUOUS'],['L-SITE-GWALL',8,'CONTINUOUS'],['L-SITE-HEDGE',3,'CONTINUOUS'],['L-SITE-RAILING',250,'CONTINUOUS'],['A-ANNO-TEXT',7,'CONTINUOUS'],...refLayers.map(n=>[n,9,'CONTINUOUS'])];
+    ['A-COLS',6,'CONTINUOUS'],['A-AREA-IDEN',2,'CONTINUOUS'],['A-ANNO-DIMS',1,'CONTINUOUS'],['A-AREA-MEAS',30,'CONTINUOUS'],['L-SITE-FENCE',32,'CONTINUOUS'],['L-SITE-GWALL',8,'CONTINUOUS'],['L-SITE-HEDGE',3,'CONTINUOUS'],['E-LITE',2,'CONTINUOUS'],['E-POWR',6,'CONTINUOUS'],['L-SITE-RAILING',250,'CONTINUOUS'],['A-ANNO-TEXT',7,'CONTINUOUS'],...refLayers.map(n=>[n,9,'CONTINUOUS'])];
   const T=['0','SECTION','2','TABLES',
     '0','TABLE','2','LTYPE','70','2',
     '0','LTYPE','2','CONTINUOUS','70','0','3','Solid line','72','65','73','0','40','0',
@@ -2386,7 +2404,12 @@ function laserTarget(svcs){const L=u=>String(u||'').toLowerCase();const all=[];(
   const c=all.find(x=>!STD_UUID.test(x.svc)&&(x.p&48)&&(x.p&12));if(c)return {svc:c.svc,chr:c.chr,wt:wt(c)};
   return {svc:GLM.SVC,chr:GLM.CHR,wt:'withResponse'};}
 const charFlags=p=>[[2,'read'],[4,'write-no-reply'],[8,'write'],[16,'notify'],[32,'indicate']].filter(([b])=>p&b).map(([,n])=>n).join(', ');
-function laserDiag(d,svcs,step,e){const lines=['Device: '+(d.name||'?')+' ('+d.address+')','Failed at: '+step,'Error: '+String(e&&e.message||e),'Services:'];
+function laserDiag(d,svcs,step,e){const es=String(e&&e.message||e);
+  if(step==='connect'&&/Status: ?(133|147|8|62)\b|timeout|timed out/i.test(es)){
+    openModal('The laser didn’t answer','The phone found '+(d.name||'the laser')+' but it didn’t accept the connection (tried 3 times). This usually means the laser went to sleep or is still connected to something else.\n\n1. Press the laser’s measure button once to wake it, and check the Bluetooth symbol is on in its display.\n2. Close the Bosch app, and in the phone’s Bluetooth settings make sure the laser isn’t connected to anything.\n3. If it still fails: switch the laser off and on, turn the phone’s Bluetooth off and on, then try again.',null,
+      [{label:'Details',fn:()=>{closeModal();laserDiagFull(d,svcs,step,e);}},{label:'Try again',primary:true,fn:()=>{closeModal();laserConnect();}}]);return;}
+  laserDiagFull(d,svcs,step,e);}
+function laserDiagFull(d,svcs,step,e){const lines=['Device: '+(d.name||'?')+' ('+d.address+')','Failed at: '+step,'Error: '+String(e&&e.message||e),'Services:'];
   (svcs||[]).forEach(S=>{lines.push('  '+S.uuid);(S.characteristics||[]).forEach(c=>lines.push('    '+c.uuid+'  ['+charFlags(+c.properties||0)+']'));});if(!svcs)lines.push('  (could not read them)');
   const txt=lines.join('\n');
   openModal('Couldn’t connect to the laser','The laser was found but the connection didn’t finish. Check that the Bosch app is closed and Bluetooth is on in the laser’s menu, then try again. If it keeps failing, copy this and send it to whoever set up the app — it shows exactly what the laser offers.',txt,
@@ -2409,7 +2432,12 @@ async function blecConnect(){
     list.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{stop();pick(laser.scanList.find(d=>d.address===b.dataset.a));});};
   all.onchange=render;
   const pick=async d=>{if(!d)return;closeModal();setLaserState('connecting');let svcs=null,step='connect';
-    try{await binv('connect',{address:d.address,onDisconnect:bchan(()=>onLaserLost()),allowIbeacons:false});
+    try{// stop the search first and give the phone a moment: many Android phones fail to connect while still scanning.
+      // Android often times out on the first try (status 133/147), so try up to three times.
+      try{await binv('stop_scan');}catch(_){}await new Promise(r=>setTimeout(r,400));
+      let last=null;for(let i=0;i<3;i++){try{if(i){toast('The laser didn’t answer, trying again ('+(i+1)+' of 3)…');try{await binv('disconnect');}catch(_){}await new Promise(r=>setTimeout(r,1200));}
+          await binv('connect',{address:d.address,onDisconnect:bchan(()=>onLaserLost()),allowIbeacons:false});last=null;break;}catch(e){last=e;}}
+      if(last)throw last;
       step='list services';try{svcs=await binv('list_services',{address:d.address});}catch(e){svcs=null;}
       const T=laserTarget(svcs);step='subscribe to '+T.chr;
       await binv('subscribe',{characteristic:T.chr,service:T.svc,onData:bchan(v=>onLaserData(v))});
@@ -2489,6 +2517,154 @@ function drawLaserMark(){if(laser.state!=='on'||!activeTab||laserChain.tab!==act
   const s=toS(p),col=C.accent||'#1f6feb';ctx.save();ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=1.5;
   ctx.beginPath();ctx.arc(s[0],s[1],7,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(s[0],s[1],2.5,0,Math.PI*2);ctx.fill();
   ctx.font='600 11px '+getComputedStyle(document.body).fontFamily;ctx.fillText('next',s[0]+10,s[1]-8);ctx.restore();}
+
+
+/* ============================== electrical layer: lights, switches and sockets ============================== */
+// A layer drawn on top of the plan, shown or hidden with the Electrical button. Wall-mounted parts (wall lights, switches,
+// sockets) sit on a wall face and slide along it; ceiling lights and garden lights sit anywhere; strip lights are a line.
+const ELEC={
+  spot:{label:'Spot light',group:'light',mount:'ceiling',power:0.45,range:3.5},
+  chandelier:{label:'Chandelier',group:'light',mount:'ceiling',drop:700,power:1.6,range:7},
+  strip:{label:'Strip light',group:'light',mount:'line',h:2400,power:0.5,range:3},
+  wall:{label:'Wall light',group:'light',mount:'wall',h:1800,power:0.8,range:4},
+  garden:{label:'Garden light',group:'light',mount:'free',h:600,power:0.7,range:4},
+  switch:{label:'Switch',group:'switch',mount:'wall',h:1100},
+  dimmer:{label:'Dimmer switch',group:'switch',mount:'wall',h:1100},
+  socket:{label:'Socket',group:'plug',mount:'wall',h:300},
+  wpsocket:{label:'Outdoor socket',group:'plug',mount:'wall',h:450}};
+const ELEC_COL={light:'#c98a00',lightFill:'#ffd84d',switch:'#6741d9',plug:'#6741d9'};
+let elecOn=true;try{elecOn=localStorage.getItem('bm-elec')!=='0';}catch(e){}
+let elecGhost=null,stripStart=null;
+const elecList=()=>M.elec||(M.elec=[]);
+const elecById=id=>elecList().find(e=>e.id===id);
+function setElecLayer(on){elecOn=on;try{localStorage.setItem('bm-elec',on?'1':'0');}catch(e){}const b=$('#elecBtn');if(b)b.setAttribute('aria-pressed',String(on));
+  if(!on&&sel&&sel.kind==='elec'){sel=null;renderInspector();}dirty();schedule3d();}
+// where a wall-mounted part is: point on the wall face, and the direction pointing into the room
+function elecWallPos(E){const w=wallById(E.wall);if(!w)return null;const d=wallDir(w),n=mul(perp(d),E.side||1);const s=clamp(E.s,0,wallLen(w));
+  return {p:add(add(w.a,mul(d,s)),mul(n,w.t/2)),n,d,w};}
+function elecPos(E){if(E.a)return mul(add(E.a,E.b),.5);if(E.wall){const q=elecWallPos(E);return q?q.p:null;}return [E.x,E.y];}
+function wallSlot(p,tolPx=40){const w=nearestWall(p,tolPx);if(!w)return null;const d=wallDir(w),L=wallLen(w);let s=clamp(dot(sub(p,w.a),d),60,L-60);
+  if(snapOn&&!shiftDown)s=Math.round(s/lenStep())*lenStep();const side=dot(sub(p,w.a),perp(d))>=0?1:-1;return {wall:w.id,s,side};}
+function elecHeightDefault(t){return ELEC[t].h||null;}
+function newElec(t,at){const D=ELEC[t],E={id:nid('e'),type:t};if(D.h)E.h=D.h;if(t==='switch')E.gangs=1;if(t==='socket')E.dbl=true;Object.assign(E,at);return E;}
+
+// ---- drawing
+function elecSize(){return clamp(view.s*170,7,15);}
+function drawElecItem(E,selected,ghost){const D=ELEC[E.type];if(!D)return;const s=elecSize();ctx.save();ctx.globalAlpha=ghost?0.6:1;
+  const lc=ELEC_COL.light,pc=ELEC_COL.plug;ctx.lineWidth=1.6;
+  const ring=(q,r)=>{if(!selected)return;ctx.save();ctx.strokeStyle=C.accent;ctx.lineWidth=2;ctx.setLineDash([3,2]);ctx.beginPath();ctx.arc(q[0],q[1],r,0,Math.PI*2);ctx.stroke();ctx.restore();};
+  if(D.mount==='line'){const a=toS(E.a),b=toS(E.b);ctx.lineCap='round';ctx.strokeStyle=ELEC_COL.lightFill;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();
+    ctx.strokeStyle=lc;ctx.lineWidth=1.4;ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.setLineDash([]);
+    [a,b].forEach(q=>{ctx.fillStyle=lc;ctx.beginPath();ctx.arc(q[0],q[1],2.6,0,Math.PI*2);ctx.fill();});
+    if(selected){ctx.strokeStyle=C.accent;ctx.lineWidth=1;ctx.setLineDash([3,2]);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.setLineDash([]);
+      [a,b].forEach(q=>{ctx.fillStyle=C.paper;ctx.strokeStyle=C.accent;ctx.lineWidth=1.5;ctx.fillRect(q[0]-4,q[1]-4,8,8);ctx.strokeRect(q[0]-4,q[1]-4,8,8);});}
+    ctx.restore();return;}
+  if(D.mount==='wall'){const P=elecWallPos(E)||(E._ghost);if(!P){ctx.restore();return;}const q=toS(P.p),n=P.n,ang=Math.atan2(n[1],n[0]);
+    ctx.translate(q[0],q[1]);ctx.rotate(ang);   // local +x points into the room, the wall face is the y axis
+    if(E.type==='wall'){ctx.fillStyle=ELEC_COL.lightFill;ctx.strokeStyle=lc;ctx.beginPath();ctx.arc(0,0,s*0.8,-Math.PI/2,Math.PI/2);ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.beginPath();for(let i=-2;i<=2;i++){const a=i*0.55;ctx.moveTo(Math.cos(a)*s*0.95,Math.sin(a)*s*0.95);ctx.lineTo(Math.cos(a)*s*1.3,Math.sin(a)*s*1.3);}ctx.stroke();}
+    else if(D.group==='plug'){ctx.fillStyle=C.paper;ctx.strokeStyle=pc;ctx.beginPath();ctx.arc(0,0,s*0.7,-Math.PI/2,Math.PI/2);ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.beginPath();const k=E.dbl||E.type==='wpsocket'?[-0.28,0.28]:[0];k.forEach(y=>{ctx.moveTo(s*0.7,y*s);ctx.lineTo(s*1.25,y*s);});ctx.stroke();
+      if(E.type==='wpsocket'){ctx.rotate(-ang);ctx.fillStyle=pc;ctx.font='700 '+Math.round(s*0.7)+'px '+getComputedStyle(document.body).fontFamily;ctx.textAlign='center';ctx.textBaseline='middle';const t=mul(n,s*1.9);ctx.fillText('WP',t[0],t[1]);ctx.rotate(ang);}}
+    else{ // switch: a small circle off the wall with a lever line, one tick per gang; dimmers get an arrow
+      const cx=s*0.9;ctx.strokeStyle=pc;ctx.fillStyle=pc;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(cx-3,0);ctx.stroke();ctx.beginPath();ctx.arc(cx,0,3.2,0,Math.PI*2);ctx.fill();
+      const lv=[Math.cos(-0.8)*s*1.1,Math.sin(-0.8)*s*1.1];ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx+lv[0],lv[1]);
+      const g=E.type==='dimmer'?1:clamp(E.gangs||1,1,4);for(let i=0;i<g;i++){const t=1-i*0.22,px=cx+lv[0]*t,py=lv[1]*t,pp=[Math.cos(0.77)*4,Math.sin(0.77)*4];ctx.moveTo(px,py);ctx.lineTo(px+pp[0],py+pp[1]);}ctx.stroke();
+      if(E.type==='dimmer'){ctx.beginPath();ctx.arc(cx,0,s*0.75,-0.3,1.2);ctx.stroke();const e=[cx+Math.cos(1.2)*s*0.75,Math.sin(1.2)*s*0.75];ctx.beginPath();ctx.moveTo(e[0],e[1]);ctx.lineTo(e[0]+4,e[1]-1);ctx.lineTo(e[0]+1,e[1]-4);ctx.closePath();ctx.fill();}}
+    ctx.restore();if(selected)ring(add(q,mul(n,s*0.8)),s*1.5);elecLabel(E,add(q,mul(n,s*2.2)));return;}
+  const q=toS([E.x,E.y]);
+  if(E.type==='spot'){ctx.fillStyle=ELEC_COL.lightFill;ctx.strokeStyle=lc;ctx.beginPath();ctx.arc(q[0],q[1],s*0.55,0,Math.PI*2);ctx.fill();ctx.stroke();
+    const r=s*0.55*0.72;ctx.beginPath();ctx.moveTo(q[0]-r,q[1]-r);ctx.lineTo(q[0]+r,q[1]+r);ctx.moveTo(q[0]+r,q[1]-r);ctx.lineTo(q[0]-r,q[1]+r);ctx.stroke();ring(q,s*0.9);}
+  else if(E.type==='chandelier'){const R=s*1.05;ctx.strokeStyle=lc;ctx.fillStyle=ELEC_COL.lightFill;ctx.beginPath();ctx.arc(q[0],q[1],R*0.42,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.beginPath();for(let i=0;i<8;i++){const a=i/8*Math.PI*2;ctx.moveTo(q[0]+Math.cos(a)*R*0.42,q[1]+Math.sin(a)*R*0.42);ctx.lineTo(q[0]+Math.cos(a)*R,q[1]+Math.sin(a)*R);}ctx.stroke();
+    for(let i=0;i<8;i+=2){const a=i/8*Math.PI*2;ctx.beginPath();ctx.arc(q[0]+Math.cos(a)*R,q[1]+Math.sin(a)*R,2.2,0,Math.PI*2);ctx.fill();ctx.stroke();}ring(q,R*1.3);}
+  else if(E.type==='garden'){ctx.fillStyle=ELEC_COL.lightFill;ctx.strokeStyle=lc;ctx.beginPath();ctx.arc(q[0],q[1],s*0.45,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.beginPath();for(let i=0;i<8;i++){const a=i/8*Math.PI*2+Math.PI/8;ctx.moveTo(q[0]+Math.cos(a)*s*0.65,q[1]+Math.sin(a)*s*0.65);ctx.lineTo(q[0]+Math.cos(a)*s*0.95,q[1]+Math.sin(a)*s*0.95);}ctx.stroke();ring(q,s*1.15);}
+  ctx.restore();elecLabel(E,[q[0]+s*1.2,q[1]-s*0.9],true);}
+function elecLabel(E,q,screen){if(!E.label)return;ctx.save();ctx.font='600 10.5px '+getComputedStyle(document.body).fontFamily;ctx.fillStyle=ELEC[E.type].group==='light'?ELEC_COL.light:ELEC_COL.plug;ctx.textAlign=screen?'left':'center';ctx.textBaseline='middle';ctx.fillText(E.label,q[0],q[1]);ctx.restore();}
+function drawElecLayer(){if(!elecOn||!M.elec)return;M.elec.forEach(E=>drawElecItem(E,sel&&sel.kind==='elec'&&sel.id===E.id,false));}
+function drawElecTool(){if(tool!=='elec')return;
+  if(placeType==='strip'){if(stripStart){const b=elecGhost&&elecGhost.b||stripStart;drawElecItem({type:'strip',a:stripStart,b},true,true);const L=dist(stripStart,b);if(L>1){const m=toS(mul(add(stripStart,b),.5));txt(fmtLen(L,true),[m[0],m[1]-14],{weight:'600',size:11,color:ELEC_COL.light});}}return;}
+  if(elecGhost)drawElecItem(elecGhost,false,true);}
+// ---- tool
+function elecToolMove(p){const t=placeType,D=ELEC[t];if(!D)return;
+  if(D.mount==='line'){if(stripStart){const sn=snapPoint(p,stripStart);elecGhost={b:sn.p};}else elecGhost=null;dirty();return;}
+  if(D.mount==='wall'){const sl=wallSlot(p);elecGhost=sl?Object.assign(newElec(t,sl),{id:'ghost'}):null;$('#snapchip').textContent=sl?'on wall':'';dirty();return;}
+  const sn=snapPoint(p,null);elecGhost=Object.assign(newElec(t,{x:sn.p[0],y:sn.p[1]}),{id:'ghost'});dirty();}
+function elecToolClick(p){const t=placeType,D=ELEC[t];if(!D)return;if(!elecOn)setElecLayer(true);
+  if(D.mount==='line'){const sn=snapPoint(p,stripStart);if(!stripStart){stripStart=sn.p;elecGhost={b:sn.p};renderInspector();dirty();return;}
+    if(dist(sn.p,stripStart)<50){toast('Click further away to set the length of the strip.');return;}
+    const E=newElec('strip',{a:stripStart.slice(),b:sn.p.slice()});mutate(()=>elecList().push(E));stripStart=null;elecGhost=null;sel={kind:'elec',id:E.id};renderInspector();return;}
+  if(D.mount==='wall'){const sl=wallSlot(p);if(!sl){toast(D.label+'s go on a wall: click close to a wall.');return;}const E=newElec(t,sl);mutate(()=>elecList().push(E));sel={kind:'elec',id:E.id};renderInspector();return;}
+  const sn=snapPoint(p,null);const E=newElec(t,{x:sn.p[0],y:sn.p[1]});mutate(()=>elecList().push(E));sel={kind:'elec',id:E.id};renderInspector();}
+function hitElec(p){if(!elecOn||!M.elec)return null;const tol=Math.max(elecSize()*1.3,ptrTouch?18:10)/view.s;let best=null,bd=1e9;
+  M.elec.forEach(E=>{let d;if(E.a){const c=segClosest(p,E.a,E.b);d=dist(p,c.q)*1.6;if(sel&&sel.kind==='elec'&&sel.id===E.id){if(dist(p,E.a)<tol*0.6)return void(best={kind:'elec',id:E.id,end:'a'},bd=-1);if(dist(p,E.b)<tol*0.6)return void(best={kind:'elec',id:E.id,end:'b'},bd=-1);}}
+    else{const q=E.wall?(elecWallPos(E)?add(elecWallPos(E).p,mul(elecWallPos(E).n,elecSize()*0.8/view.s)):null):[E.x,E.y];if(!q)return;d=dist(p,q);}
+    if(d<tol&&d<bd){bd=d;best={kind:'elec',id:E.id};}});return best;}
+function elecDragStart(drag,p){const E=elecById(drag.id);if(!E)return;drag.e0=JSON.parse(JSON.stringify(E));}
+function elecDragMove(drag,p){const E=elecById(drag.id),E0=drag.e0;if(!E||!E0)return;const dv=sub(p,drag.p0);
+  if(E0.a){if(drag.end){const sn=snapPoint(p,drag.end==='a'?E0.b:E0.a);E[drag.end]=sn.p;}else{let mv=dv;if(snapOn&&!shiftDown)mv=[Math.round(mv[0]/lenStep())*lenStep(),Math.round(mv[1]/lenStep())*lenStep()];E.a=add(E0.a,mv);E.b=add(E0.b,mv);}drag.snap={kind:'strip light'};return;}
+  if(E0.wall){const sl=wallSlot(p,60);if(sl){E.wall=sl.wall;E.s=sl.s;E.side=sl.side;}drag.snap={kind:'on wall'};return;}
+  const sn=snapPoint(add([E0.x,E0.y],dv),null);E.x=sn.p[0];E.y=sn.p[1];drag.snap={kind:'move'};}
+// ---- side panel
+function elecPanelHTML(E,field){const D=ELEC[E.type];const same=Object.keys(ELEC).filter(k=>ELEC[k].mount===D.mount&&ELEC[k].group===D.group);
+  let h=`<div class="selname">${D.label}<span class="selbtns"><button class="btn" id="delBtn">Delete</button></span></div><div class="kv">`;
+  if(same.length>1)h+=`<label for="eType">Type</label><select id="eType">${same.map(k=>`<option value="${k}"${k===E.type?' selected':''}>${ELEC[k].label}</option>`).join('')}</select>`;
+  if(E.type==='switch')h+=`<label>Gangs</label><div class="seg segsm" role="group" aria-label="Number of switches">${[1,2,3,4].map(g=>`<button data-gang="${g}" aria-pressed="${(E.gangs||1)===g}">${g}</button>`).join('')}</div>`;
+  if(E.type==='socket')h+=`<label>Outlets</label><div class="seg segsm" role="group" aria-label="Single or double"><button data-dbl="0" aria-pressed="${!E.dbl}">Single</button><button data-dbl="1" aria-pressed="${!!E.dbl}">Double</button></div>`;
+  if(E.a)h+=field('Length','eLen',fmtLen(dist(E.a,E.b)));
+  if(D.mount!=='ceiling')h+=field(D.mount==='wall'?'Height to centre':'Height','eH',fmtLen(E.h!=null?E.h:(D.h||0)));
+  if(E.type==='chandelier')h+=field('Drop from ceiling','eDrop',fmtLen(E.drop!=null?E.drop:D.drop));
+  h+=`<label for="eLabel">Label</label><input id="eLabel" data-type="text" style="font-family:var(--f-body)" placeholder="e.g. L1 or circuit" value="${esc(E.label||'')}"></div>`;
+  h+=`<p class="tip">${D.mount==='wall'?'Drag it along the wall, or onto another wall. ':D.mount==='line'?'Drag the line to move it, or drag a square end to change its length. ':'Drag it to move. '}The <b>Electrical</b> button above the plan shows or hides this layer.</p>`;return h;}
+function bindElecPanel(E){const on=(id,fn)=>{const e=document.getElementById(id);if(e)e.onchange=()=>fn(e.value);};
+  on('eType',v=>{mutate(()=>{E.type=v;if(v==='switch'&&!E.gangs)E.gangs=1;});renderInspector();});
+  document.querySelectorAll('[data-gang]').forEach(b=>b.onclick=()=>{mutate(()=>E.gangs=+b.dataset.gang);renderInspector();});
+  document.querySelectorAll('[data-dbl]').forEach(b=>b.onclick=()=>{mutate(()=>E.dbl=b.dataset.dbl==='1');renderInspector();});
+  on('eLen',v=>{const L=parseLen(v);if(L>=50)mutate(()=>{const d=norm(sub(E.b,E.a));E.b=add(E.a,mul(d,L));});renderInspector();});
+  on('eH',v=>{const L=parseLen(v);if(L>=0)mutate(()=>E.h=L);renderInspector();});
+  on('eDrop',v=>{const L=parseLen(v);if(L>=0)mutate(()=>E.drop=L);renderInspector();});
+  on('eLabel',v=>{mutate(()=>{E.label=v.trim()||undefined;});renderInspector();});
+  const db=$('#delBtn');if(db)db.onclick=()=>deleteSel();}
+function elecToolPanel(){const D=ELEC[placeType];if(!D)return '';
+  const how=D.mount==='wall'?'Click on a wall face where it goes. It sits on the side you click.':D.mount==='line'?(stripStart?'Click where the strip ends (Shift for any angle).':'Click where the strip starts.'):'Click where it goes.';
+  return `<p class="h">New ${D.label.toLowerCase()}</p><p class="tip">${how} Heights and labels can be changed afterwards in its side panel.</p>`;}
+// ---- schedule
+function elecSchedule(){const L=M.elec||[];if(!L.length)return '';const c={};let strip=0;L.forEach(E=>{if(E.type==='strip')strip+=dist(E.a,E.b);else c[E.type]=(c[E.type]||0)+1;});
+  let s='';Object.keys(ELEC).forEach(k=>{if(k==='strip'){if(strip)s+=`<span>Strip lights</span><span>${fmtRun(strip)} ${runU()}</span>`;return;}if(c[k])s+=`<span>${ELEC[k].label}${c[k]>1?'s':''}</span><span>× ${c[k]}</span>`;});
+  const sw=L.filter(E=>E.type==='switch').reduce((a,E)=>a+(E.gangs||1),0);if(sw)s+=`<span>Switch gangs</span><span>× ${sw}</span>`;
+  const out=L.filter(E=>E.type==='socket').reduce((a,E)=>a+(E.dbl?2:1),0)+L.filter(E=>E.type==='wpsocket').length*2;if(out)s+=`<span>Socket outlets</span><span>× ${out}</span>`;return s;}
+// ---- elevations: plates and lights on the wall face
+function drawElevElec(e,ox,baseY,s){if(!elecOn||!M.elec||!e.left||e.curved)return;const X=x=>ox+x*s,Z=z=>baseY-z*s;
+  M.elec.forEach(E=>{if(!E.wall)return;const P=elecWallPos(E);if(!P)return;if(dot(P.n,e.nIn)<0.99)return;if(Math.abs(dot(sub(P.p,e.P),e.nIn))>40)return;
+    const x=dot(sub(P.p,e.left),e.right);if(x<-5||x>e.L+5)return;const D=ELEC[E.type],h=E.h!=null?E.h:D.h,cx=X(x),cy=Z(h);
+    ctx.save();ctx.lineWidth=1.2;
+    if(E.type==='wall'){ctx.fillStyle=ELEC_COL.lightFill;ctx.strokeStyle=ELEC_COL.light;ctx.beginPath();ctx.ellipse(cx,cy,Math.max(5,90*s),Math.max(7,130*s),0,0,Math.PI*2);ctx.fill();ctx.stroke();}
+    else{const w=(E.type==='socket'&&E.dbl?146:86)*s,hh=86*s;ctx.fillStyle=C.paper;ctx.strokeStyle=ELEC_COL.plug;ctx.fillRect(cx-w/2,cy-hh/2,w,hh);ctx.strokeRect(cx-w/2,cy-hh/2,w,hh);}
+    ctx.fillStyle=ELEC_COL.plug;ctx.font='10px '+getComputedStyle(document.body).fontFamily;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText((E.label?E.label+' ':'')+fmtLen(h),cx+Math.max(8,60*s),cy);ctx.restore();});}
+// ---- 3D: fittings, and at night the lights shine
+function ceilAt(p){const r=roomAt(p);if(r&&r.elevs&&r.elevs.length)return Math.max(...r.elevs.map(e=>e.H));return 2700;}
+function build3dElec(g,box,S,inside){if(!M.elec||!M.elec.length)return [];const lights=[];
+  const metal=M3('chrome'),bulb=M3('bulb'),plate=M3('white');
+  M.elec.forEach(E=>{const D=ELEC[E.type];if(!D)return;
+    if(D.mount==='wall'){const P=elecWallPos(E);if(!P)return;const h=E.h!=null?E.h:D.h,ry=-Math.atan2(P.d[1],P.d[0]);
+      if(cutaway&&!inside&&h>1150)return;
+      if(E.type==='wall'){const c=add(P.p,mul(P.n,45));box(160,220,90,bulb,c[0],h,c[1],ry).castShadow=false;lights.push({p:add(P.p,mul(P.n,250)),y:h,D,E});}
+      else{const w=E.type==='socket'&&E.dbl?146:86;const c=add(P.p,mul(P.n,5));box(w,86,10,plate,c[0],h,c[1],ry).castShadow=false;}
+      return;}
+    if(D.mount==='line'){const H=E.h!=null?E.h:D.h;if(!inside&&cutaway&&H>1150)return;const L=dist(E.a,E.b),c=mul(add(E.a,E.b),.5),d=norm(sub(E.b,E.a));
+      box(L,12,24,bulb,c[0],H,c[1],-Math.atan2(d[1],d[0])).castShadow=false;lights.push({p:c,y:H-80,D,E});return;}
+    if(E.type==='garden'){const h=E.h!=null?E.h:D.h;const m=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.045,h*S,10),M3('frame'));m.position.set(E.x*S,h*S/2,E.y*S);m.castShadow=true;g.add(m);
+      const t=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,0.12,14),bulb);t.position.set(E.x*S,(h+60)*S,E.y*S);g.add(t);lights.push({p:[E.x,E.y],y:h+60,D,E});return;}
+    if(!inside)return;   // ceiling lights are only seen from inside (there is no ceiling in the outside view)
+    const Hc=ceilAt([E.x,E.y]);
+    if(E.type==='spot'){const m=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,0.01,18),bulb);m.position.set(E.x*S,Hc*S-0.006,E.y*S);g.add(m);
+      const r=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.055,0.006,18),metal);r.position.set(E.x*S,Hc*S-0.003,E.y*S);g.add(r);lights.push({p:[E.x,E.y],y:Hc-150,D,E});}
+    else{const drop=E.drop!=null?E.drop:D.drop,y=Hc-drop;const rod=new THREE.Mesh(new THREE.CylinderGeometry(0.006,0.006,drop*S,6),metal);rod.position.set(E.x*S,(Hc-drop/2)*S,E.y*S);g.add(rod);
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(0.28,0.012,8,32),metal);ring.rotation.x=Math.PI/2;ring.position.set(E.x*S,y*S,E.y*S);g.add(ring);
+      for(let i=0;i<6;i++){const a=i/6*Math.PI*2;const b=new THREE.Mesh(new THREE.SphereGeometry(0.045,12,8),bulb);b.position.set((E.x+Math.cos(a)*280)*S,(y+40)*S,(E.y+Math.sin(a)*280)*S);g.add(b);}
+      lights.push({p:[E.x,E.y],y:y-50,D,E});}});
+  return lights;}
 
 /* ============================== tabs: several projects open at once, and autosave ============================== */
 // Each tab keeps its own drawing, undo history, reference, file and view. The active tab's state lives in the usual
@@ -3444,7 +3620,7 @@ function build3d(){
         if(!w.kind){const nn=perp(dir);[1,-1].forEach(k=>{const hp=add(add(H0,mul(dir,lw-50)),mul(nn,k*45));box(130,22,22,M3('chrome'),hp[0],1000,hp[1],rr).castShadow=false;});}}});
     if(cut){wallPieces(w,ext).forEach(([a,b])=>{const cc=add(w.a,mul(d,(a+b)/2));const m=box(b-a,6,w.t,capMat,cc[0],H+3,cc[1],ry);m.castShadow=false;});}});
   // floors, wall tiles, skirting, ceilings and room lights
-  let nl=0;
+  let nl=0;const litRooms=new Set();if(elecOn)(M.elec||[]).forEach(E=>{if(ELEC[E.type]&&ELEC[E.type].group==='light'){const r=roomAt(elecPos(E)||[0,0]);if(r)litRooms.add(r);}});
   rooms.forEach(r=>{const shape=new THREE.Shape(r.net.map(p=>new THREE.Vector2(p[0]*S,p[1]*S)));const geo=new THREE.ShapeGeometry(shape);
     const fm=floorOf(r.type,r.meta&&r.meta.floor);const m=new THREE.Mesh(geo,M3(fm));m.material.side=THREE.DoubleSide;m.rotation.x=Math.PI/2;m.position.y=0.002;m.receiveShadow=true;g.add(m);
     let Hc=0;(r.elevs||[]).forEach(e=>{Hc=Math.max(Hc,e.H);if(e.curved||!e.left)return;const at=(x,off)=>add(add(e.left,mul(e.right,x)),mul(e.nIn,off));const f3=[e.nIn[0],0,e.nIn[1]];
@@ -3455,7 +3631,7 @@ function build3d(){
       let iv=[[0,e.L]];(e.ops||[]).forEach(({o,x0,x1})=>{if(o.sill<90)iv=cutIv(iv,x0,x1);});
       if(r.tileMode!=='full')iv.forEach(([x0,x1])=>{if(x1-x0<40)return;const c=at((x0+x1)/2,7);const rr=-Math.atan2(e.right[1],e.right[0]);box(x1-x0,80,14,M3('trim'),c[0],40,c[1],rr).castShadow=false;});});
     if(inside&&Hc>0){const cg=new THREE.ShapeGeometry(shape);const cm=new THREE.Mesh(cg,M3('ceiling'));cm.material.side=THREE.DoubleSide;cm.rotation.x=Math.PI/2;cm.position.y=Hc*S-0.001;cm.castShadow=true;cm.receiveShadow=true;g.add(cm);}
-    if(night&&nl<q3d().lights){nl++;const c=r.centroid,h=(Hc||2700);const bulb=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.16,0.03,20),M3('bulb'));bulb.position.set(c[0]*S,h*S-0.02,c[1]*S);g.add(bulb);
+    if(night&&!litRooms.has(r)&&nl<q3d().lights){nl++;const c=r.centroid,h=(Hc||2700);const bulb=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.16,0.03,20),M3('bulb'));bulb.position.set(c[0]*S,h*S-0.02,c[1]*S);g.add(bulb);
       const size=Math.sqrt(Math.max(r.netArea||4e6,1e6))/1000;const L=new THREE.PointLight(0xffd6a0,1.6,size*2.2+3,2);L.position.set(c[0]*S,h*S-0.25,c[1]*S);g.add(L);}});
   M.items.forEach(it=>{const ry=-it.r*Math.PI/180;const P=(lx,ly)=>add([it.x,it.y],rotV([lx,ly],it.r));
     const part=(lx,ly,w,d,z0,h,m)=>{const c=P(lx,ly);return box(w,h,d,m,c[0],z0+h/2,c[1],ry);};
@@ -3473,6 +3649,7 @@ function build3d(){
     else if(t==='tub'){part(0,0,it.w,it.d,it.z,it.h,white);part(0,0,it.w-140,it.d-140,it.z+it.h-2,4,mat(0xdfe8ea,{roughness:0.15}));}
     else if(t==='shower'){part(0,0,it.w,it.d,it.z,60,white);const gl=part(0,0,it.w,it.d,it.z+60,1900,M3('glass'));gl.castShadow=false;}
     else part(0,0,it.w,it.d,it.z,it.h,carc);});
+  if(elecOn){const lights=build3dElec(g,box,S,inside);if(night)lights.forEach(Lt=>{if(nl>=q3d().lights)return;nl++;const pl=new THREE.PointLight(0xffd6a0,Lt.D.power,Lt.D.range,2);pl.position.set(Lt.p[0]*S,Lt.y*S,Lt.p[1]*S);g.add(pl);});}
   surfaces3d(g,S);
   const colMat=mat(0xe2dcd2,{roughness:0.75});
   (M.cols||[]).forEach(c=>{const H=cut?Math.min(1200,colH(c)):colH(c);
@@ -3585,6 +3762,15 @@ document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>setTool(b.data
 $('#tDoor').onclick=e=>{if(document.getElementById('doorPick')){closeDoorPick();return;}openDoorPick(e.currentTarget);};
 // Tool and fixture icons drawn as plan symbols, the way they appear on the drawing.
 const ICONS={
+  e_spot:'<circle cx="12" cy="12" r="6"/><path d="M8 8l8 8M16 8l-8 8"/>',
+  e_strip:'<path d="M3 15 21 9" stroke-width="3" stroke-opacity=".35"/><path d="M3 15 21 9" stroke-dasharray="2.5 2"/><circle cx="3" cy="15" r="1.2" fill="currentColor"/><circle cx="21" cy="9" r="1.2" fill="currentColor"/>',
+  e_chand:'<circle cx="12" cy="12" r="3"/><path d="M12 4v5M12 15v5M4 12h5M15 12h5M6.3 6.3l3.6 3.6M14.1 14.1l3.6 3.6M17.7 6.3l-3.6 3.6M9.9 14.1l-3.6 3.6"/>',
+  e_wall:'<path d="M5 4v16"/><path d="M5 7a5 5 0 0 1 0 10" /><path d="M13 12h4M12 7.5l3-1.5M12 16.5l3 1.5"/>',
+  e_garden:'<circle cx="12" cy="9" r="3"/><path d="M12 12v8M9 20h6M12 3v1.5M6 9H4.5M19.5 9H18M7.8 4.8l1 1M16.2 4.8l-1 1"/>',
+  e_switch:'<path d="M4 4v16"/><path d="M4 12h5"/><circle cx="10.5" cy="12" r="1.6" fill="currentColor"/><path d="M10.5 12l6-6M15 4.5l2.5 2.5"/>',
+  e_dimmer:'<path d="M4 4v16"/><path d="M4 12h5"/><circle cx="10.5" cy="12" r="1.6" fill="currentColor"/><path d="M10.5 12l6-6"/><path d="M15 13a5 5 0 0 1-3 4.6"/><path d="M10.5 17.3l1.5.3-.4-1.6"/>',
+  e_socket:'<path d="M4 4v16"/><path d="M4 6.5a5.5 5.5 0 0 1 0 11"/><path d="M9.5 10h6M9.5 14h6"/>',
+  e_wp:'<path d="M4 4v16"/><path d="M4 6.5a5.5 5.5 0 0 1 0 11"/><path d="M9.5 10h4M9.5 14h4"/><path d="M15 17.5l1.2 3 1.3-3 1.3 3 1.2-3" stroke-width="1.2"/>',
   select:'<path d="M6 3.5 18 12l-5.4 1.3 3 6.1-2.4 1.1-3-6.2L6 18z" fill="currentColor" fill-opacity=".14"/>',
   arcwall:'<path d="M3.5 21A17.5 17.5 0 0 1 21 3.5M3.5 15.5A12 12 0 0 1 15.5 3.5M3.5 15.5V21M15.5 3.5H21"/><path d="M6 15.2 9.5 19M8.5 11.5l5.2 5.6M12 8.6l5 5.3M15.5 6.6l4 4.1" stroke-width="1"/>',
   wall:'<rect x="2.5" y="8.5" width="19" height="7"/><path d="M5 15.5 12 8.5M10 15.5l7-7M15 15.5l6-6M2.5 13.5l5-5" stroke-width="1"/>',
@@ -3690,7 +3876,7 @@ setSnap(snapOn);setFree(freeMove,true);setEmptyDrag(emptyDrag);setView('plan');s
 activate(activeTab,true);syncAutosaveUI();
 if(three.ok){applyLook();syncWalkUI();}
 if(firstRun)setTimeout(welcomeDialog,300);
-$('#laserBtn').onclick=laserBtnClick;renderLaserBtn();wireExit();
+$('#laserBtn').onclick=laserBtnClick;renderLaserBtn();$('#elecBtn').onclick=()=>{setElecLayer(!elecOn);toast(elecOn?'Electrical layer shown.':'Electrical layer hidden.');};$('#elecBtn').setAttribute('aria-pressed',String(elecOn));wireExit();
 $('#detailsBtn').onclick=()=>setSheet(!$('#app').classList.contains('sheet'));$('#sheetClose').onclick=()=>setSheet(false);$('#sheetGrip').onclick=()=>setSheet(false);
 requestAnimationFrame(()=>{fit();frame3d();build3d();loop();});
 if(!three.ok){$('.pane3d .panelabel').textContent='3D unavailable: the 3D library did not load';}

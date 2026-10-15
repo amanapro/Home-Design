@@ -1,6 +1,6 @@
 // Offline cache for the browser-installed (PWA) version. The desktop and Android apps don't use this.
 // Bump VERSION whenever you deploy changed files so installed copies pick them up.
-const VERSION = 'benchmark-0.7.7';
+const VERSION = 'benchmark-0.8.0';
 const FILES = [
   './', './index.html', './app.css', './app.js', './manifest.webmanifest', './vendor/three.min.js', './vendor/pdf.min.js', './vendor/pdf.worker.min.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png',

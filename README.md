@@ -159,6 +159,15 @@ Works best with: a clear scan or PDF in which walls are visibly thicker than oth
 - iPhone HEIC photos (export as JPG first)
 - room names (these aren't read from the image; click a room to name it)
 
+### Electrical layer: lights, switches and sockets
+
+- The **Electrical** section in the tool panel has **Spot light**, **Strip light**, **Chandelier**, **Wall light** and **Garden light**; **Switch** and **Dimmer**; **Socket** and **Outdoor socket**.
+- Spot lights, chandeliers and garden lights: click where they go. Strip lights: click the start and the end (snaps to angles; `Shift` for any angle). Wall lights, switches and sockets: click on a wall face; they sit on the side you click and slide along the wall when dragged.
+- The **Electrical** button above the plan shows or hides the whole layer (hidden parts can't be selected, and they leave 3D, elevations and exports too). Picking an electrical tool shows it again.
+- Select one to change it: switch gangs (1–4), single or double socket, height to centre (switches 1,100 mm, sockets 300 mm, wall lights 1,800 mm to start), strip length and height, chandelier drop, and a label such as a circuit name.
+- Wall-mounted parts appear in the room's elevations at their height. The fixture schedule counts each kind, switch gangs and socket outlets, and adds up strip-light length. AutoCAD export puts lights on `E-LITE` and switches and sockets on `E-POWR`.
+- In 3D, plates and wall lights show on the walls, garden lights stand in the yard, and from inside (Walk) the spot lights, chandeliers and strips show on the ceiling. At **Night** these lights switch on in place of the default room light.
+
 ### 3D: realistic look and walking inside
 
 - **Walk** (top right of the 3D view), **Walk inside** in a room's side panel, or double-click a floor in 3D puts you inside at eye level (1.6 m). Walk with `W` `A` `S` `D` or the arrow keys (`Q`/`E` or left/right arrows turn, `Shift` goes faster), drag to look around, scroll to step. On phones and tablets use the on-screen joystick and drag to look. Walls, fixtures and furniture stop you; door openings let you through. **Go to room** jumps to any room, and the plan shows where you stand and which way you look. `Esc` or **Orbit** goes back to the outside view.

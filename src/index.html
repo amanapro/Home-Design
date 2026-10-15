@@ -91,6 +91,23 @@
       <button class="sechead" aria-expanded="true" aria-controls="libBath">Bath<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <div class="toollist lib" id="libBath"></div>
     </section>
+    <section class="tsec" data-sec="elec">
+      <button class="sechead" aria-expanded="true" aria-controls="libElec">Electrical<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="toollist lib" id="libElec">
+        <p class="libsub">Lights</p>
+        <button class="titem tool" data-tool="elec" data-kind="spot" title="Spot light: click where it goes on the ceiling"><span class="ico" data-icon="e_spot"></span><span class="tl">Spot light</span></button>
+        <button class="titem tool" data-tool="elec" data-kind="strip" title="Strip light: click its start and end"><span class="ico" data-icon="e_strip"></span><span class="tl">Strip light</span></button>
+        <button class="titem tool" data-tool="elec" data-kind="chandelier" title="Chandelier: click where it hangs"><span class="ico" data-icon="e_chand"></span><span class="tl">Chandelier</span></button>
+        <button class="titem tool" data-tool="elec" data-kind="wall" title="Wall light: click on a wall"><span class="ico" data-icon="e_wall"></span><span class="tl">Wall light</span></button>
+        <button class="titem tool" data-tool="elec" data-kind="garden" title="Garden light: click where it stands"><span class="ico" data-icon="e_garden"></span><span class="tl">Garden light</span></button>
+        <p class="libsub">Switches</p>
+        <button class="titem tool" data-tool="elec" data-kind="switch" title="Light switch: click on a wall"><span class="ico" data-icon="e_switch"></span><span class="tl">Switch</span></button>
+        <button class="titem tool" data-tool="elec" data-kind="dimmer" title="Dimmer switch: click on a wall"><span class="ico" data-icon="e_dimmer"></span><span class="tl">Dimmer</span></button>
+        <p class="libsub">Plugs</p>
+        <button class="titem tool" data-tool="elec" data-kind="socket" title="Socket: click on a wall"><span class="ico" data-icon="e_socket"></span><span class="tl">Socket</span></button>
+        <button class="titem tool" data-tool="elec" data-kind="wpsocket" title="Outdoor (weatherproof) socket: click on a wall"><span class="ico" data-icon="e_wp"></span><span class="tl">Outdoor socket</span></button>
+      </div>
+    </section>
   </nav>
 
   <nav class="tabbar" id="tabbar" role="tablist" aria-label="Open projects"></nav>
@@ -100,6 +117,7 @@
       <span class="panelabel">Plan · Level 1</span>
       <div class="paneopts planopts">
         <button class="btn" id="pasteBtn" title="Paste the copied items (Ctrl+V)" hidden>Paste</button>
+        <button class="btn togglebtn" id="elecBtn" aria-pressed="true" title="Show or hide the electrical layer: lights, switches and sockets">Electrical</button>
         <div class="menuwrap measwrap"><button class="btn togglebtn" id="measBtn" aria-haspopup="true" aria-expanded="false" aria-controls="measMenu" aria-pressed="true" title="Choose which measurements show on the plan">Measures ▾</button>
           <div class="menu measmenu" id="measMenu" hidden>
             <p class="mh">Show on the plan</p>

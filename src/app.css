@@ -331,6 +331,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .wcard:hover,.wcard:focus-visible{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-weak)}
 .wimg{display:grid;place-items:center;width:100%;height:78px;border-radius:7px;background:var(--panel);color:var(--accent)}.wimg svg{width:84px;height:63px}
 .wtx{display:flex;flex-direction:column;gap:3px}.wtx b{font-size:15px}.wtx span{font-size:12.5px;color:var(--muted);line-height:1.4}
+#modalText{white-space:pre-line}
 .sheethead,.detailsbtn{display:none}
 @media (max-width:900px){
   .side{position:fixed;left:0;right:0;bottom:0;max-height:46vh;z-index:40;border-top:1px solid var(--line);border-radius:16px 16px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.25);transform:translateY(105%);transition:transform .22s ease;overscroll-behavior:contain;padding-bottom:env(safe-area-inset-bottom)}
