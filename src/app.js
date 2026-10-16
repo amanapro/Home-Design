@@ -4072,18 +4072,20 @@ function epDrawTool(){if(tool!=='eplan')return;
   else if(epGhost&&epGhost.sn)drawSnapMark(epGhost.sn);}
 
 // ---- snapping wire ends to lights, switches, sockets and wiring parts
-// Spot lights and strip lights take one wire each; a strip light is wired at one of its ends, right on the end point.
+// A spot light takes one wire; a strip light takes one wire at each end (two in all), right on the end point.
 const EP_ONE=new Set(['spot','strip']);var epBlocked=null;
-function epUsedLights(skipWire,extra){const u=new Set();epD().wires.forEach(w=>{if(w.id===skipWire)return;[w.ea,w.eb].forEach(r=>{if(r&&r.k==='e')u.add(r.id);});});(extra||[]).forEach(r=>{if(r&&r.k==='e')u.add(r.id);});return u;}
+const lightKey=r=>r.id+(r.end?':'+r.end:'');
+function epUsedLights(skipWire,extra){const u=new Set();epD().wires.forEach(w=>{if(w.id===skipWire)return;[w.ea,w.eb].forEach(r=>{if(r&&r.k==='e')u.add(lightKey(r));});});(extra||[]).forEach(r=>{if(r&&r.k==='e')u.add(lightKey(r));});return u;}
 function epSnapRef(p,skipWire,extra){const tol=(ptrTouch?22:14)/view.s;let best=null,bd=tol;const used=epUsedLights(skipWire,extra);epBlocked=null;
   (M.elec||[]).forEach(E=>{let q,d,end=null;
-    if(E.a){d=dist(p,segClosest(p,E.a,E.b).q);end=dist(p,E.a)<=dist(p,E.b)?'a':'b';q=E[end].slice();}else{q=elecPos(E);if(!q)return;d=dist(p,q);}
-    if(d>=bd)return;if(EP_ONE.has(E.type)&&used.has(E.id)){if(!epBlocked||d<epBlocked.d)epBlocked={E,d};return;}
+    if(E.a){d=dist(p,segClosest(p,E.a,E.b).q);if(d>=bd)return;const ends=(dist(p,E.a)<=dist(p,E.b)?['a','b']:['b','a']).filter(k=>!used.has(E.id+':'+k));
+      if(!ends.length){if(!epBlocked||d<epBlocked.d)epBlocked={E,d};return;}end=ends[0];q=E[end].slice();}
+    else{q=elecPos(E);if(!q)return;d=dist(p,q);if(d>=bd)return;if(EP_ONE.has(E.type)&&used.has(E.id)){if(!epBlocked||d<epBlocked.d)epBlocked={E,d};return;}}
     bd=d;best={ref:end?{k:'e',id:E.id,end}:{k:'e',id:E.id},p:q};});
   if(best)epBlocked=null;
   epD().devs.forEach(d=>{if(d.type==='pv'){const n=Math.max(1,d.count||1),cols=Math.max(1,d.cols||Math.ceil(n/2)),rows=Math.ceil(n/cols);const hw=cols*1134/2,hh=rows*1722/2;const l=rotV(sub(p,[d.x,d.y]),-(d.r||0));if(Math.abs(l[0])<hw&&Math.abs(l[1])<hh&&!best)best={ref:{k:'d',id:d.id},p:[d.x,d.y]};return;}
     const q=epDevPos(d);if(dist(p,q)<bd*1.4){bd=dist(p,q);best={ref:{k:'d',id:d.id},p:q};epBlocked=null;}});return best;}
-const epBlockedMsg=()=>epBlocked?(ELEC[epBlocked.E.type].label+' already has its wire (one wire per '+ELEC[epBlocked.E.type].label.toLowerCase()+')'):'';
+const epBlockedMsg=()=>!epBlocked?'':epBlocked.E.a?'Strip light already has a wire on both ends':ELEC[epBlocked.E.type].label+' already has its wire (one wire per '+ELEC[epBlocked.E.type].label.toLowerCase()+')';
 function epPoint(p,from,skipWire,extra){const r=epSnapRef(p,skipWire,extra);if(r)return r;const sn=snapPoint(p,from);return {p:sn.p,sn};}
 
 // ---- tools
@@ -4104,7 +4106,7 @@ function epNewDev(t){const d={id:'ghost',type:t};const E=epD();
 function epToolClick(p){if(!epKind)return;
   if(epKind==='wire_ac'||epKind==='wire_dc'||epKind==='tube'){const isT=epKind==='tube';const last=epDraw&&epDraw.pts[epDraw.pts.length-1];
     const r=isT?(()=>{const sn=snapPoint(p,last);return {p:sn.p};})():epPoint(p,last,null,epDraw?[epDraw.ea]:[]);
-    if(!isT&&!r.ref&&epBlocked){toast(epBlockedMsg()+'. Delete or move its wire first.');return;}
+    if(!isT&&!r.ref&&epBlocked){toast(epBlockedMsg()+'. Delete or move '+(epBlocked.E.a?'one of its wires':'its wire')+' first.');return;}
     if(!epDraw){const st=epSet(),dc=epKind==='wire_dc';
       epDraw=isT?{type:'tube',pts:[r.p.slice()],smooth:true,dia:20,tt:'PVC flexible'}
         :{type:'wire',pts:[r.p.slice()],ea:r.ref||null,smooth:true,kind:dc?'dc':'ac',std:st.std,size:st.std==='awg'?(dc?'10':'12'):(dc?'4':'2.5'),cores:dc?2:3,route:'ceiling'};
