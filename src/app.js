@@ -1997,7 +1997,7 @@ function bindInspector(){
     {const st=$('#oStyle');if(st)st.onchange=()=>{mutate(()=>{if(st.value==='swing')delete o.style;else o.style=st.value;});renderInspector();};}
     const fb=$('#flipBtn');if(fb)fb.onclick=()=>mutate(()=>o.flip^=1);const hb=$('#hingeBtn');if(hb)hb.onclick=()=>mutate(()=>o.hinge^=1);}
   if(sel&&sel.kind==='elec'){const E=elecById(sel.id);if(E)bindElecPanel(E);}
-  if(sel&&sel.kind==='elecs'){const db=$('#delBtn');if(db)db.onclick=()=>deleteSel();const cb=$('#copyBtn');if(cb)cb.onclick=()=>copySel();}
+  if(sel&&sel.kind==='elecs'){const pb=$('#eParallelAll');if(pb)pb.onclick=()=>{let n=0;mutate(()=>sel.ids.forEach(id=>{const E=elecById(id);if(E&&E.a&&stripParallel(E))n++;}));renderInspector();toast(n+' strip light'+(n===1?'':'s')+' turned parallel to the nearest wall.');};const db=$('#delBtn');if(db)db.onclick=()=>deleteSel();const cb=$('#copyBtn');if(cb)cb.onclick=()=>copySel();}
   if(sel&&sel.kind==='item'){const it=M.items.find(x=>x.id===sel.id);
     const setDim=(k,v,min)=>{const x=len(v,min);if(x!==null)mutate(()=>{
       if(k==='d'){const back=add([it.x,it.y],rotV([0,-it.d/2],it.r));it.d=x;const c=add(back,rotV([0,x/2],it.r));it.x=c[0];it.y=c[1];}else it[k]=x;});renderInspector();};
@@ -2669,7 +2669,7 @@ function elecGroupMove(drag,p){let dv=sub(p,drag.p0);if(snapOn&&!shiftDown)dv=[M
 function elecNudge(ids,v,step){ids.forEach(id=>{const E=elecById(id);if(!E)return;const E0=JSON.parse(JSON.stringify(E));
   if(E.wall){const w=wallById(E.wall);if(!w)return;const a=dot(v,wallDir(w));if(Math.abs(a)>0.5)E.s=clamp(E.s+Math.sign(a)*step,0,wallLen(w));return;}elecShift(E,E0,mul(v,step));});}
 function elecsPanelHTML(ids){const c={};ids.forEach(id=>{const E=elecById(id);if(E)c[E.type]=(c[E.type]||0)+1;});
-  return `<div class="selname">${ids.length} electrical parts<span class="selbtns"><button class="btn" id="copyBtn">Copy</button><button class="btn" id="delBtn">Delete</button></span></div><div class="kv">${Object.keys(c).map(k=>`<label>${ELEC[k].label}</label><span class="ro">× ${c[k]}</span>`).join('')}</div>
+  return `<div class="selname">${ids.length} electrical parts<span class="selbtns"><button class="btn" id="copyBtn">Copy</button><button class="btn" id="delBtn">Delete</button></span></div>${c.strip?'<div class="rowbtns" style="margin-bottom:8px"><button class="btn" id="eParallelAll">Make the strips parallel to their walls</button></div>':''}<div class="kv">${Object.keys(c).map(k=>`<label>${ELEC[k].label}</label><span class="ro">× ${c[k]}</span>`).join('')}</div>
     <p class="tip">Drag any of them to move them all, or use the arrow keys. <kbd>Ctrl</kbd>/<kbd>Shift</kbd>+click adds or removes one; <kbd>Ctrl+C</kbd> / <kbd>Ctrl+V</kbd> copies and pastes them; <kbd>Del</kbd> deletes them.</p>`;}
 // distances from a point to the nearest wall faces, along x and y (or along given directions)
 function rayToWall(p,dir){let best=null,bt=1e12;M.walls.forEach(w=>{[[0,wallLen(w)]].forEach(([s0,s1])=>{const q=pieceQuad(w,s0,s1);   // whole wall: measure to the face even across doors and windows
@@ -2686,15 +2686,25 @@ function drawElecTool(){if(tool!=='elec')return;
   if(placeType==='strip'&&!stripStart&&elecGhost&&elecGhost.c)drawElecDims({x:elecGhost.c[0],y:elecGhost.c[1]});
   if(placeType==='strip'){if(stripStart){const b=elecGhost&&elecGhost.b||stripStart;drawElecItem({type:'strip',a:stripStart,b},true,true);if(dist(stripStart,b)>50)drawElecDims({a:stripStart,b});const L=dist(stripStart,b);if(L>1){const m=toS(mul(add(stripStart,b),.5));txt(fmtLen(L,true),[m[0],m[1]-14],{weight:'600',size:11,color:ELEC_COL.light});}}return;}
   if(elecGhost){drawElecItem(elecGhost,false,true);if(elecGhost.x!=null)drawElecDims(elecGhost);}}
+// Strip lights line up with the wall they run along: when the strip points within ~12° of a nearby wall
+// (angled walls included), its free end is turned to run exactly parallel to that wall. Shift = no alignment.
+function stripWallNear(a,b,maxD){let best=null,bd=maxD;const m=b?mul(add(a,b),.5):a;M.walls.forEach(w=>{if(w.kind)return;const c=segClosest(m,w.a,w.b);const d=dist(m,c.q)-w.t/2;if(d<bd){bd=d;best=w;}});return best;}
+function stripAlign(a,b){if(shiftDown||dist(a,b)<50)return {p:b,w:null};const v=sub(b,a),L=vlen(v),u=mul(v,1/L);let best=null,ba=0.21;
+  M.walls.forEach(w=>{if(w.kind)return;const c=segClosest(a,w.a,w.b);if(dist(a,c.q)-w.t/2>1500)return;const d=wallDir(w);const ang=Math.acos(clamp(Math.abs(dot(u,d)),0,1));if(ang<ba){ba=ang;best=w;}});
+  if(!best)return {p:b,w:null};let d=wallDir(best);if(dot(d,u)<0)d=mul(d,-1);let l=dot(v,d);if(snapOn)l=Math.max(lenStep(),Math.round(l/lenStep())*lenStep());
+  return {p:add(a,mul(d,l)).map(x=>Math.round(x*10)/10),w:best};}
+// turn a strip about its middle so it runs parallel to the wall nearest to it
+function stripParallel(E){const w=stripWallNear(E.a,E.b,3000);if(!w)return false;const m=mul(add(E.a,E.b),.5),L=dist(E.a,E.b);let d=wallDir(w);if(dot(d,sub(E.b,E.a))<0)d=mul(d,-1);
+  E.a=add(m,mul(d,-L/2)).map(x=>Math.round(x*10)/10);E.b=add(m,mul(d,L/2)).map(x=>Math.round(x*10)/10);return true;}
 // ---- tool
 function elecToolMove(p){const t=placeType,D=ELEC[t];if(!D)return;
-  if(D.mount==='line'){if(stripStart){const sn=snapPoint(p,stripStart);elecGhost={b:sn.p};}else elecGhost={c:snapPoint(p,null).p};dirty();return;}
+  if(D.mount==='line'){if(stripStart){const sn=snapPoint(p,stripStart),al=stripAlign(stripStart,sn.p);elecGhost={b:al.p};$('#snapchip').textContent=al.w?'parallel to wall':'';}else elecGhost={c:snapPoint(p,null).p};dirty();return;}
   if(D.mount==='wall'){const sl=wallSlot(p);elecGhost=sl?Object.assign(newElec(t,sl),{id:'ghost'}):null;$('#snapchip').textContent=sl?'on wall':'';dirty();return;}
   const sn=snapPoint(p,null);elecGhost=Object.assign(newElec(t,{x:sn.p[0],y:sn.p[1]}),{id:'ghost'});dirty();}
 function elecToolClick(p){const t=placeType,D=ELEC[t];if(!D||!elecOn)return;
   if(D.mount==='line'){const sn=snapPoint(p,stripStart);if(!stripStart){stripStart=sn.p;elecGhost={b:sn.p};renderInspector();dirty();return;}
     if(dist(sn.p,stripStart)<50){toast('Click further away to set the length of the strip.');return;}
-    const E=newElec('strip',{a:stripStart.slice(),b:sn.p.slice()});mutate(()=>elecList().push(E));stripStart=null;elecGhost=null;sel={kind:'elec',id:E.id};renderInspector();return;}
+    const E=newElec('strip',{a:stripStart.slice(),b:stripAlign(stripStart,sn.p).p.slice()});mutate(()=>elecList().push(E));stripStart=null;elecGhost=null;sel={kind:'elec',id:E.id};renderInspector();return;}
   if(D.mount==='wall'){const sl=wallSlot(p);if(!sl){toast(D.label+'s go on a wall: click close to a wall.');return;}const E=newElec(t,sl);mutate(()=>elecList().push(E));sel={kind:'elec',id:E.id};renderInspector();return;}
   const sn=snapPoint(p,null);const E=newElec(t,{x:sn.p[0],y:sn.p[1]});mutate(()=>elecList().push(E));sel={kind:'elec',id:E.id};renderInspector();}
 function hitElec(p){if(!elecOn||!M.elec)return null;const tol=Math.max(elecSize()*1.3,ptrTouch?18:10)/view.s;let best=null,bd=1e9;
@@ -2703,7 +2713,7 @@ function hitElec(p){if(!elecOn||!M.elec)return null;const tol=Math.max(elecSize(
     if(d<tol&&d<bd){bd=d;best={kind:'elec',id:E.id};}});return best;}
 function elecDragStart(drag,p){const E=elecById(drag.id);if(!E)return;drag.e0=JSON.parse(JSON.stringify(E));}
 function elecDragMove(drag,p){const E=elecById(drag.id),E0=drag.e0;if(!E||!E0)return;const dv=sub(p,drag.p0);
-  if(E0.a){if(drag.end){const sn=snapPoint(p,drag.end==='a'?E0.b:E0.a);E[drag.end]=sn.p;}else{let mv=dv;if(snapOn&&!shiftDown)mv=[Math.round(mv[0]/lenStep())*lenStep(),Math.round(mv[1]/lenStep())*lenStep()];E.a=add(E0.a,mv);E.b=add(E0.b,mv);}drag.snap={kind:'strip light'};return;}
+  if(E0.a){if(drag.end){const o=drag.end==='a'?E0.b:E0.a,sn=snapPoint(p,o),al=stripAlign(o,sn.p);E[drag.end]=al.p;drag.snap={kind:al.w?'parallel to wall':'strip light'};return;}else{let mv=dv;if(snapOn&&!shiftDown)mv=[Math.round(mv[0]/lenStep())*lenStep(),Math.round(mv[1]/lenStep())*lenStep()];E.a=add(E0.a,mv);E.b=add(E0.b,mv);}drag.snap={kind:'strip light'};return;}
   if(E0.wall){const sl=wallSlot(p,60);if(sl){E.wall=sl.wall;E.s=sl.s;E.side=sl.side;}drag.snap={kind:'on wall'};return;}
   const sn=snapPoint(add([E0.x,E0.y],dv),null);E.x=sn.p[0];E.y=sn.p[1];drag.snap={kind:'move'};}
 // ---- side panel
@@ -2712,7 +2722,7 @@ function elecPanelHTML(E,field){const D=ELEC[E.type];const same=Object.keys(ELEC
   if(same.length>1)h+=`<label for="eType">Type</label><select id="eType">${same.map(k=>`<option value="${k}"${k===E.type?' selected':''}>${ELEC[k].label}</option>`).join('')}</select>`;
   if(E.type==='switch')h+=`<label>Gangs</label><div class="seg segsm" role="group" aria-label="Number of switches">${[1,2,3,4].map(g=>`<button data-gang="${g}" aria-pressed="${(E.gangs||1)===g}">${g}</button>`).join('')}</div>`;
   if(E.type==='socket')h+=`<label>Outlets</label><div class="seg segsm" role="group" aria-label="Single or double"><button data-dbl="0" aria-pressed="${!E.dbl}">Single</button><button data-dbl="1" aria-pressed="${!!E.dbl}">Double</button></div>`;
-  if(E.a)h+=field('Length','eLen',fmtLen(dist(E.a,E.b)));
+  if(E.a)h+=field('Length','eLen',fmtLen(dist(E.a,E.b)))+`<label></label><button class="btn" id="eParallel" title="Turn it about its middle to run parallel to the nearest wall">Parallel to nearest wall</button>`;
   if(D.mount!=='ceiling')h+=field(D.mount==='wall'?'Height to centre':'Height','eH',fmtLen(E.h!=null?E.h:(D.h||0)));
   if(E.type==='chandelier')h+=field('Drop from ceiling','eDrop',fmtLen(E.drop!=null?E.drop:D.drop));
   h+=`<label for="eLabel">Label</label><input id="eLabel" data-type="text" style="font-family:var(--f-body)" placeholder="e.g. L1 or circuit" value="${esc(E.label||'')}"></div>`;
@@ -2725,6 +2735,7 @@ function bindElecPanel(E){const on=(id,fn)=>{const e=document.getElementById(id)
   on('eH',v=>{const L=parseLen(v);if(L>=0)mutate(()=>E.h=L);renderInspector();});
   on('eDrop',v=>{const L=parseLen(v);if(L>=0)mutate(()=>E.drop=L);renderInspector();});
   on('eLabel',v=>{mutate(()=>{E.label=v.trim()||undefined;});renderInspector();});
+  {const b=$('#eParallel');if(b)b.onclick=()=>{if(!stripWallNear(E.a,E.b,3000)){toast('No wall within 3 m of this strip.');return;}mutate(()=>stripParallel(E));renderInspector();toast('Strip turned parallel to the wall.');};}
   const db=$('#delBtn');if(db)db.onclick=()=>deleteSel();const cb=$('#copyBtn');if(cb)cb.onclick=()=>copySel();}
 function elecToolPanel(){const D=ELEC[placeType];if(!D)return '';
   const how=D.mount==='wall'?'Click on a wall face where it goes. It sits on the side you click.':D.mount==='line'?(stripStart?'Click where the strip ends (Shift for any angle).':'Click where the strip starts.'):'Click where it goes.';
