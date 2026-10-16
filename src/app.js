@@ -3966,7 +3966,7 @@ function wireColor(w){const a=wireMM2(w);return a<=1?'#7b8a90':a<=1.6?'#1c7ed6':
 const wireWidth=w=>clamp(1.4+Math.sqrt(wireMM2(w))*1.1,1.6,7);
 
 // ---- geometry
-function epRefPos(r){if(!r)return null;if(r.k==='e'){const E=elecById(r.id);return E?elecPos(E):null;}const d=epDev(r.id);return d?epDevPos(d):null;}
+function epRefPos(r){if(!r)return null;if(r.k==='e'){const E=elecById(r.id);if(!E)return null;if(E.a&&r.end)return E[r.end].slice();return elecPos(E);}const d=epDev(r.id);return d?epDevPos(d):null;}
 function epDevPos(d){if(EPDEV[d.type]&&EPDEV[d.type].mount==='wall'&&d.wall){const q=elecWallPos(d);return q?add(q.p,mul(q.n,epDevDepth(d)/2)):[d.x||0,d.y||0];}return [d.x,d.y];}
 const epDevDepth=d=>d.type==='battery'?220:d.type==='panel'||d.type==='inverter'?140:110;
 function epPts(o){const P=o.pts.map(p=>p.slice());const a=epRefPos(o.ea),b=epRefPos(o.eb);if(a)P[0]=a;if(b)P[P.length-1]=b;return P;}
@@ -4001,6 +4001,7 @@ function epEnter(){if(!epAllowed()){toast('Draw at least 4 walls and add at leas
   if(eMode)return;eMode=true;const v=$('#stage').dataset.view;epPrevView=v==='eplan'?'plan':v;
   setView('plan');$('#app').classList.add('emode');eMode=true;setTool('select');sel=null;epKind=null;epDraw=null;
   ['vPlan','vSplit','vElev','v3d'].forEach(id=>$('#'+id).setAttribute('aria-pressed','false'));
+  if(M.ep)M.ep.wires.forEach(w=>{[['ea',1],['eb',-2]].forEach(([k,j])=>{const r=w[k];if(!r||r.k!=='e'||r.end)return;const E=elecById(r.id);if(!E||!E.a)return;const nb=w.pts.length>2?w.pts[j<0?w.pts.length-2:1]:w.pts[k==='ea'?w.pts.length-1:0];r.end=dist(nb,E.a)<=dist(nb,E.b)?'a':'b';});});
   if(M.ep)M.ep.wires.concat(M.ep.tubes).forEach(o=>{const Q=epPts(o);o.pts[0]=Q[0];o.pts[o.pts.length-1]=Q[Q.length-1];});
   epSync();renderInspector();renderTakeoff();dirty();
   if(!epHas())toast('Electric plan: the home plan is locked. Place the breaker panel, then draw wires with the Electric plan tools, starting at a light, switch, socket or the panel.');}
@@ -4071,15 +4072,23 @@ function epDrawTool(){if(tool!=='eplan')return;
   else if(epGhost&&epGhost.sn)drawSnapMark(epGhost.sn);}
 
 // ---- snapping wire ends to lights, switches, sockets and wiring parts
-function epSnapRef(p){const tol=(ptrTouch?22:14)/view.s;let best=null,bd=tol;
-  (M.elec||[]).forEach(E=>{const q=elecPos(E);if(q&&dist(p,q)<bd){bd=dist(p,q);best={ref:{k:'e',id:E.id},p:q};}});
+// Spot lights and strip lights take one wire each; a strip light is wired at one of its ends, right on the end point.
+const EP_ONE=new Set(['spot','strip']);var epBlocked=null;
+function epUsedLights(skipWire,extra){const u=new Set();epD().wires.forEach(w=>{if(w.id===skipWire)return;[w.ea,w.eb].forEach(r=>{if(r&&r.k==='e')u.add(r.id);});});(extra||[]).forEach(r=>{if(r&&r.k==='e')u.add(r.id);});return u;}
+function epSnapRef(p,skipWire,extra){const tol=(ptrTouch?22:14)/view.s;let best=null,bd=tol;const used=epUsedLights(skipWire,extra);epBlocked=null;
+  (M.elec||[]).forEach(E=>{let q,d,end=null;
+    if(E.a){d=dist(p,segClosest(p,E.a,E.b).q);end=dist(p,E.a)<=dist(p,E.b)?'a':'b';q=E[end].slice();}else{q=elecPos(E);if(!q)return;d=dist(p,q);}
+    if(d>=bd)return;if(EP_ONE.has(E.type)&&used.has(E.id)){if(!epBlocked||d<epBlocked.d)epBlocked={E,d};return;}
+    bd=d;best={ref:end?{k:'e',id:E.id,end}:{k:'e',id:E.id},p:q};});
+  if(best)epBlocked=null;
   epD().devs.forEach(d=>{if(d.type==='pv'){const n=Math.max(1,d.count||1),cols=Math.max(1,d.cols||Math.ceil(n/2)),rows=Math.ceil(n/cols);const hw=cols*1134/2,hh=rows*1722/2;const l=rotV(sub(p,[d.x,d.y]),-(d.r||0));if(Math.abs(l[0])<hw&&Math.abs(l[1])<hh&&!best)best={ref:{k:'d',id:d.id},p:[d.x,d.y]};return;}
-    const q=epDevPos(d);if(dist(p,q)<bd*1.4){bd=dist(p,q);best={ref:{k:'d',id:d.id},p:q};}});return best;}
-function epPoint(p,from){const r=epSnapRef(p);if(r)return r;const sn=snapPoint(p,from);return {p:sn.p,sn};}
+    const q=epDevPos(d);if(dist(p,q)<bd*1.4){bd=dist(p,q);best={ref:{k:'d',id:d.id},p:q};epBlocked=null;}});return best;}
+const epBlockedMsg=()=>epBlocked?(ELEC[epBlocked.E.type].label+' already has its wire (one wire per '+ELEC[epBlocked.E.type].label.toLowerCase()+')'):'';
+function epPoint(p,from,skipWire,extra){const r=epSnapRef(p,skipWire,extra);if(r)return r;const sn=snapPoint(p,from);return {p:sn.p,sn};}
 
 // ---- tools
 function epToolMove(p){if(!epKind)return;
-  if(epKind==='wire_ac'||epKind==='wire_dc'||epKind==='tube'){epGhost=epKind==='tube'?(()=>{const sn=snapPoint(p,epDraw&&epDraw.pts[epDraw.pts.length-1]);return {p:sn.p,sn};})():epPoint(p,epDraw&&epDraw.pts[epDraw.pts.length-1]);dirty();return;}
+  if(epKind==='wire_ac'||epKind==='wire_dc'||epKind==='tube'){epGhost=epKind==='tube'?(()=>{const sn=snapPoint(p,epDraw&&epDraw.pts[epDraw.pts.length-1]);return {p:sn.p,sn};})():epPoint(p,epDraw&&epDraw.pts[epDraw.pts.length-1],null,epDraw?[epDraw.ea]:[]);$('#snapchip').textContent=epBlockedMsg()||(epGhost&&epGhost.ref?'to '+refName(epGhost.ref):'');dirty();return;}
   const D=EPDEV[epKind];if(!D)return;
   if(D.mount==='wall'){const sl=wallSlot(p);epGhost=sl?{dev:Object.assign(epNewDev(epKind),sl)}:null;dirty();return;}
   const sn=snapPoint(p,null);epGhost={dev:Object.assign(epNewDev(epKind),{x:sn.p[0],y:sn.p[1]}),sn};dirty();}
@@ -4094,7 +4103,8 @@ function epNewDev(t){const d={id:'ghost',type:t};const E=epD();
   return d;}
 function epToolClick(p){if(!epKind)return;
   if(epKind==='wire_ac'||epKind==='wire_dc'||epKind==='tube'){const isT=epKind==='tube';const last=epDraw&&epDraw.pts[epDraw.pts.length-1];
-    const r=isT?(()=>{const sn=snapPoint(p,last);return {p:sn.p};})():epPoint(p,last);
+    const r=isT?(()=>{const sn=snapPoint(p,last);return {p:sn.p};})():epPoint(p,last,null,epDraw?[epDraw.ea]:[]);
+    if(!isT&&!r.ref&&epBlocked){toast(epBlockedMsg()+'. Delete or move its wire first.');return;}
     if(!epDraw){const st=epSet(),dc=epKind==='wire_dc';
       epDraw=isT?{type:'tube',pts:[r.p.slice()],smooth:true,dia:20,tt:'PVC flexible'}
         :{type:'wire',pts:[r.p.slice()],ea:r.ref||null,smooth:true,kind:dc?'dc':'ac',std:st.std,size:st.std==='awg'?(dc?'10':'12'):(dc?'4':'2.5'),cores:dc?2:3,route:'ceiling'};
@@ -4137,7 +4147,7 @@ function epDragMove(drag,p){const dv=sub(p,drag.p0);
     const sn=snapPoint(add([drag.o0.x,drag.o0.y],dv),null);d.x=sn.p[0];d.y=sn.p[1];drag.snap={kind:'move'};return;}
   const o=drag.t==='wire'?epWire(drag.id):epTube(drag.id);if(!o)return;const last=o.pts.length-1;
   if(drag.pt!=null){const i=drag.pt,end=i===0||i===last;
-    if(end&&drag.t==='wire'){const r=epPoint(p,o.pts[i===0?1:last-1]);o.pts[i]=r.p.slice();o[i===0?'ea':'eb']=r.ref||null;drag.snap={kind:r.ref?'to '+refName(r.ref):'free end'};return;}
+    if(end&&drag.t==='wire'){const r=epPoint(p,o.pts[i===0?1:last-1],o.id,[i===0?o.eb:o.ea]);o.pts[i]=r.p.slice();o[i===0?'ea':'eb']=r.ref||null;drag.snap={kind:r.ref?'to '+refName(r.ref):epBlocked?epBlockedMsg():'free end'};return;}
     const sn=snapPoint(p,null);o.pts[i]=sn.p.slice();if(end)o[i===0?'ea':'eb']=null;drag.snap={kind:'bend point'};return;}
   // dragging the line itself pulls a new bend point out of it
   if(drag.seg!=null){const P=drag.pts0;const Q=epPts(o);let si=1,bd=1e12;for(let i=1;i<Q.length;i++){const c=segClosest(drag.p0,Q[i-1],Q[i]);const d=dist(drag.p0,c.q);if(d<bd){bd=d;si=i;}}
