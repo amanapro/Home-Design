@@ -238,20 +238,40 @@ function wallDir(w){return norm(sub(w.b,w.a));}
 // An end marked loose stays where it is but is not joined: neighbours don't drag it and it doesn't fill the corner.
 const isLoose=(w,k)=>!!(w.loose&&w.loose[k]);
 function setLoose(w,k,v){if(v){w.loose=w.loose||{};w.loose[k]=true;}else if(w.loose){delete w.loose[k];if(!w.loose.a&&!w.loose.b)delete w.loose;}}
-function wallExt(w){
-  const res=[0,0];[w.a,w.b].forEach((P,k)=>{if(isLoose(w,k?'b':'a'))return;
+// How far each wall end reaches past its end point, per side (+n side, -n side), so joined walls meet cleanly
+// at any angle: two walls meeting end to end are mitred (their faces meet at a point, nothing sticks out);
+// a wall ending on the side of another stops at that wall's far face; three or more walls at one point
+// overlap squarely as before. A loose (unsnapped) end stays square at its end point.
+function wallCaps(w){const L=wallLen(w),d=wallDir(w),n=perp(d),hw=w.t/2,out=[[0,0],[0,0]];
+  [0,1].forEach(k=>{const key=k?'b':'a';if(isLoose(w,key))return;const P=w[key],e=k?d:mul(d,-1);
+    const ends=[],tees=[];
     for(const o of M.walls){if(o===w)continue;
-      if(dist(P,o.a)<1||dist(P,o.b)<1){if(!isLoose(o,dist(P,o.a)<1?'a':'b'))res[k]=Math.max(res[k],o.t/2);continue;}
-      const c=segClosest(P,o.a,o.b);if(c.t>0.0001&&c.t<0.9999&&dist(P,c.q)<1)res[k]=Math.max(res[k],o.t/2);}
-  });return res;}
+      if(dist(P,o.a)<1||dist(P,o.b)<1){const ok=dist(P,o.a)<1?'a':'b';if(!isLoose(o,ok))ends.push([o,ok]);continue;}
+      const c=segClosest(P,o.a,o.b);if(c.t>0.0001&&c.t<0.9999&&dist(P,c.q)<1)tees.push(o);}
+    if(!ends.length&&!tees.length)return;
+    const lim=Math.max(w.t,...ends.map(([o])=>o.t),...tees.map(o=>o.t))*3;
+    // the side of the wall on +n is on the left of travel when the end is b, on the right when it is a
+    const sideOf=sg=>k?sg:-sg;   // +n side -> path side (+1 left, -1 right)
+    const meet=(A,dir,B,dir2)=>{const den=cross(dir,dir2);if(Math.abs(den)<0.02)return null;return cross(sub(B,A),dir2)/den;};
+    if(ends.length===1&&!tees.length){const [o,ok]=ends[0];const far=ok==='a'?o.b:o.a;const dO=norm(sub(far,P)),ho=o.t/2;
+      [1,-1].forEach((sg,i)=>{const ps=sideOf(sg);const A=add(P,mul(perp(e),ps*hw)),B=add(P,mul(perp(dO),ps*ho));const t=meet(A,e,B,dO);
+        out[k][i]=t==null?0:clamp(t,-Math.min(L/2,lim),lim);});return;}
+    if(!ends.length&&tees.length===1){const o=tees[0],od=wallDir(o),on=perp(od);const fs=dot(e,on)>=0?1:-1;const B=add(o.a,mul(on,fs*o.t/2));   // o's face beyond the end
+      [1,-1].forEach((sg,i)=>{const ps=sideOf(sg);const A=add(P,mul(perp(e),ps*hw));const t=meet(A,e,B,od);out[k][i]=t==null?o.t/2:clamp(t,-Math.min(L/2,lim),lim);});return;}
+    const x=Math.max(...ends.map(([o])=>o.t/2),...tees.map(o=>o.t/2));out[k]=[x,x];});
+  return out;}
+function wallExt(w){const c=wallCaps(w);return [Math.max(0,c[0][0],c[0][1]),Math.max(0,c[1][0],c[1][1])];}
 
 /* solid wall pieces along a wall as [s0,s1] intervals, minus openings */
 function wallPieces(w,ext){
   const L=wallLen(w);const cuts=M.openings.filter(o=>o.wall===w.id).map(o=>[o.s-o.w/2,o.s+o.w/2]).sort((a,b)=>a[0]-b[0]);
   const out=[];let cur=-ext[0];for(const c of cuts){if(c[0]>cur)out.push([cur,c[0]]);cur=Math.max(cur,c[1]);}
   if(L+ext[1]>cur)out.push([cur,L+ext[1]]);return out;}
-function pieceQuad(w,s0,s1){const d=wallDir(w),n=perp(d),h=w.t/2;const p0=add(w.a,mul(d,s0)),p1=add(w.a,mul(d,s1));
-  return [add(p0,mul(n,h)),add(p1,mul(n,h)),add(p1,mul(n,-h)),add(p0,mul(n,-h))];}
+function pieceQuad(w,s0,s1){const d=wallDir(w),n=perp(d),h=w.t/2,L=wallLen(w);let a=[s0,s0],b=[s1,s1];
+  // a piece that runs past a joined end takes that end's mitred shape
+  if(s0<-0.01||s1>L+0.01){const c=wallCaps(w);if(s0<-0.01)a=[-c[0][0],-c[0][1]];if(s1>L+0.01)b=[L+c[1][0],L+c[1][1]];}
+  const P=(s,sg)=>add(add(w.a,mul(d,s)),mul(n,sg*h));
+  return [P(a[0],1),P(b[0],1),P(b[1],-1),P(a[1],-1)];}
 
 /* ============================== rooms (planar faces) ============================== */
 // Faces of the wall graph (each room, plus the outside). Shared by room detection and DXF outlines.
@@ -581,7 +601,9 @@ function drawPlan(){
   const its=[...M.items].sort((a,b)=>a.z-b.z);its.forEach(it=>drawItem(it,false));
   // walls (poché)
   ctx.fillStyle=C.poche;
-  M.walls.forEach(w=>{if(w.kind)return;const ext=wallExt(w);wallPieces(w,ext).forEach(([s0,s1])=>{const q=pieceQuad(w,s0,s1).map(toS);ctx.beginPath();q.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.fill();});});
+  // one path for all the walls, every piece wound the same way, so joints fill as one shape with no hairline seams
+  ctx.beginPath();M.walls.forEach(w=>{if(w.kind)return;const ext=wallExt(w);wallPieces(w,ext).forEach(([s0,s1])=>{let q=pieceQuad(w,s0,s1).map(toS);
+    let ar=0;for(let i=0;i<4;i++){const p=q[i],r=q[(i+1)%4];ar+=p[0]*r[1]-r[0]*p[1];}if(ar<0)q=q.reverse();q.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();});});ctx.fill('nonzero');
   M.walls.forEach(w=>{if(w.kind)drawYardWall(w);});
   // columns
   (M.cols||[]).forEach(c=>drawColumn(c,sel&&sel.kind==='col'&&sel.id===c.id?'selected':'normal'));
@@ -3662,6 +3684,10 @@ function build3d(){
   const S=0.001,inside=walk.on&&!three.exporting,cut=cutaway&&!inside;const wallMat=M3('plaster'),capMat=mat(0x3a4246);
   const box=(w,h,d,m,x,y,z,ry=0,u0=0,v0=0)=>{const geo=new THREE.BoxGeometry(Math.max(w,1)*S,Math.max(h,1)*S,Math.max(d,1)*S);boxUV(geo,Math.max(w,1)*S,Math.max(h,1)*S,Math.max(d,1)*S,u0*S,v0*S);
     const mesh=new THREE.Mesh(geo,m);mesh.position.set(x*S,y*S,z*S);mesh.rotation.y=ry;mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);return mesh;};
+  // an upright prism from a plan-space outline (mm), between two heights (mm): mitred wall ends
+  const prism=(pts,z0,z1,m)=>{if(z1-z0<1)return;const sh=new THREE.Shape(pts.map(p=>new THREE.Vector2(p[0]*S,-p[1]*S)));
+    const geo=new THREE.ExtrudeGeometry(sh,{depth:(z1-z0)*S,bevelEnabled:false});geo.rotateX(-Math.PI/2);geo.translate(0,z0*S,0);
+    const mesh=new THREE.Mesh(geo,m);mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);return mesh;};
   // a flat quad from four plan-space corners (mm) at heights (mm); uv in metres
   const quad=(pts,uvs,m,face)=>{const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pts.flatMap(p=>[p[0]*S,p[1]*S,p[2]*S]),3));
     geo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs.flat(),2));const a=new THREE.Vector3(...pts[0]),b=new THREE.Vector3(...pts[1]),c=new THREE.Vector3(...pts[2]);
@@ -3670,7 +3696,8 @@ function build3d(){
   const capH=w=>cut?Math.min(1200,w.h):w.h;
   M.walls.forEach(w=>{const d=wallDir(w),ext=wallExt(w),ry=-Math.atan2(d[1],d[0]),H=capH(w);
     const seg=(s0,s1,z0,z1,m)=>{if(s1-s0<1||z1-z0<1)return;const c=add(w.a,mul(d,(s0+s1)/2));box(s1-s0,z1-z0,w.t,m,c[0],(z0+z1)/2,c[1],ry,s0,z0);};
-    const wm=w.kind?yardWallMat(w.kind):wallMat;wallPieces(w,ext).forEach(([a,b])=>seg(a,b,0,H,wm));
+    const wm=w.kind?yardWallMat(w.kind):wallMat,Lw=wallLen(w);
+    wallPieces(w,ext).forEach(([a,b])=>{if(a<-0.01||b>Lw+0.01){const q=pieceQuad(w,a,b);const sq=Math.abs(dot(sub(q[3],q[0]),d))<0.5&&Math.abs(dot(sub(q[2],q[1]),d))<0.5;if(!sq){prism(q,0,H,wm);return;}}seg(a,b,0,H,wm);});
     M.openings.filter(o=>o.wall===w.id).forEach(o=>{const a=o.s-o.w/2,b=o.s+o.w/2;seg(a,b,0,Math.min(o.sill,H),wm);if(!w.kind)seg(a,b,Math.min(o.sill+o.h,H),H,wm);
       const n=perp(d),c0=add(w.a,mul(d,o.s));
       if(o.kind==='window'&&o.sill<H){const top=Math.min(o.sill+o.h,H),fw=55,fd=Math.min(80,w.t);
