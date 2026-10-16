@@ -1257,15 +1257,19 @@ function copySel(quiet){if(!sel)return false;const C0={walls:[],openings:[],cols
   if(sel.kind==='dim'){const d=(M.dims||[]).find(x=>x.id===sel.id);if(d)C0.dims.push(clone(d));}
   if(sel.kind==='area'){const A=areaById(sel.id);if(A)C0.areas.push(clone(A));}
   if(sel.kind==='text'){const T=textById(sel.id);if(T)C0.texts.push(clone(T));}
-  const pts=clipPoints(C0);if(!pts.length&&!C0.openings.length){toast('Select a wall, column, fixture, door, window, dimension or room to copy.');return false;}
+  // lights, switches and sockets: the selected ones, or the ones on the copied walls / inside the copied room
+  {const ids=new Set(elecSelIds());const roomR=sel.kind==='room'&&rooms.find(r=>pointInPoly(sel.pt,r.net));
+    C0.elec=(M.elec||[]).filter(E=>ids.has(E.id)||(E.wall&&wallIds.has(E.wall))||(roomR&&(()=>{const q=elecPos(E);if(!q)return false;if(E.wall){const P=elecWallPos(E);return P&&pointInPoly(add(P.p,mul(P.n,40)),roomR.net);}return pointInPoly(q,roomR.net);})()))
+      .map(E=>{const n=clone(E);if(E.wall){const P=elecWallPos(E);if(!P)return null;n._p=add(P.p,mul(P.n,40));delete n.wall;delete n.s;delete n.side;}return n;}).filter(Boolean);}
+  const pts=clipPoints(C0);if(!pts.length&&!C0.openings.length){toast('Select a wall, column, fixture, door, window, dimension, light, switch, socket or room to copy.');return false;}
   C0.anchor=pts.length?[Math.min(...pts.map(p=>p[0])),Math.min(...pts.map(p=>p[1]))]:[0,0];clip=C0;$('#pasteBtn').hidden=false;
-  if(!quiet){const n=[];const add_=(k,w)=>{if(C0[k].length)n.push(C0[k].length+' '+w+(C0[k].length>1?'s':''));};add_('walls','wall');add_('openings','opening');add_('cols','column');add_('items','fixture');add_('dims','dimension');add_('areas','area');add_('texts','text');
+  if(!quiet){const n=[];const add_=(k,w)=>{if(C0[k].length)n.push(C0[k].length+' '+w+(C0[k].length>1?'s':''));};add_('walls','wall');add_('openings','opening');add_('cols','column');add_('items','fixture');add_('dims','dimension');add_('areas','area');add_('texts','text');if(C0.elec.length)n.push(C0.elec.length+' electrical part'+(C0.elec.length>1?'s':''));
     toast('Copied '+n.join(', ')+'. Press Ctrl+V, or Paste on the plan, then click where it goes.');}
   return true;}
 function clipPoints(C0){const pts=[];C0.walls.forEach(w=>{const d=wallDir(w),n=perp(d);[w.a,w.b].forEach(p=>pts.push(add(p,mul(n,w.t/2)),add(p,mul(n,-w.t/2))));});
   C0.cols.forEach(c=>pts.push(...colCorners(c)));C0.items.forEach(it=>[[-1,-1],[1,-1],[1,1],[-1,1]].forEach(([x,y])=>pts.push(add([it.x,it.y],rotV([x*it.w/2,y*it.d/2],it.r)))));
-  C0.dims.forEach(d=>pts.push(d.a,d.b));(C0.areas||[]).forEach(A=>pts.push(...areaOutline(A)));(C0.texts||[]).forEach(T=>pts.push(...textBox(T)));return pts;}
-const openingOnly=()=>clip&&!clip.walls.length&&clip.openings.length&&!clip.cols.length&&!clip.items.length&&!clip.dims.length&&!(clip.areas||[]).length&&!(clip.texts||[]).length;
+  C0.dims.forEach(d=>pts.push(d.a,d.b));(C0.areas||[]).forEach(A=>pts.push(...areaOutline(A)));(C0.texts||[]).forEach(T=>pts.push(...textBox(T)));(C0.elec||[]).forEach(E=>{if(E.a)pts.push(E.a,E.b);else pts.push(E._p||[E.x,E.y]);});return pts;}
+const openingOnly=()=>clip&&!clip.walls.length&&clip.openings.length&&!(clip.elec||[]).length&&!clip.cols.length&&!clip.items.length&&!clip.dims.length&&!(clip.areas||[]).length&&!(clip.texts||[]).length;
 function startPaste(){if(!clip){toast('Nothing copied yet. Select something and press Ctrl+C.');return;}setTool('paste');pasteOff=null;updatePreview(cursor);dirty();}
 function pasteOffsetFor(p){
   if(openingOnly()){const o=clip.openings[0],w=nearestWall(p,24);if(!w)return null;const sl=openingSlot(p,w,o.w)||openingSlotLoose(p,w,o.w);return sl?{wall:w,s:sl.s}:null;}
@@ -1274,7 +1278,7 @@ function pasteOffsetFor(p){
     clip.walls.forEach(w=>[w.a,w.b].forEach(q=>{const t=add(q,off);ends.forEach(E=>{const d=dist(t,E);if(d<bd){bd=d;best=sub(E,q);}});}));
     if(best){off=best;pasteSnap='joins a wall end';}else off=[Math.round(off[0]/lenStep())*lenStep(),Math.round(off[1]/lenStep())*lenStep()];}
   return off;}
-function doPaste(){const off=pasteOff;if(!off)return;const newWalls=[],sels=[];
+function doPaste(){const off=pasteOff;if(!off)return;const newWalls=[],sels=[],newElec=[];let skipped=0;
   if(openingOnly()){const o=clip.openings[0];const n=Object.assign(clone(o),{id:nid('o'),wall:off.wall.id,s:off.s});mutate(()=>M.openings.push(n));setTool('select');sel={kind:'opening',id:n.id};renderInspector();dirty();return;}
   const map={};
   const amap={};
@@ -1286,13 +1290,21 @@ function doPaste(){const off=pasteOff;if(!off)return;const newWalls=[],sels=[];
     clip.dims.forEach(d=>{const n={id:nid('m'),a:add(d.a,off),b:add(d.b,off)};M.dims.push(n);sels.push({kind:'dim',id:n.id});});
     (clip.texts||[]).forEach(T=>{const n=Object.assign(clone(T),{id:nid('t'),x:T.x+off[0],y:T.y+off[1]});M.texts.push(n);sels.push({kind:'text',id:n.id});});
     (clip.areas||[]).forEach(A=>{const n=Object.assign(clone(A),{id:nid('g'),pts:A.pts.map(q=>add(q,off).map(v=>Math.round(v*10)/10))});M.areas.push(n);sels.push({kind:'area',id:n.id});});
-    clip.meta.forEach(m=>M.roomMeta.push(Object.assign(clone(m),{x:m.x+off[0],y:m.y+off[1]})));});
+    clip.meta.forEach(m=>M.roomMeta.push(Object.assign(clone(m),{x:m.x+off[0],y:m.y+off[1]})));
+    (clip.elec||[]).forEach(E=>{const n=elecPasted(E,off);if(!n){skipped++;return;}n.id=nid('e');elecList().push(n);newElec.push(n.id);});});
+  if(skipped)toast(skipped>1?skipped+' wall-mounted parts had no wall to sit on there and were left out.':'1 wall-mounted part had no wall to sit on there and was left out.');
   setTool('select');
   const pa=Object.values(amap);
   if(pa.length===1&&newWalls.every(id=>{const w=wallById(id);return w&&w.arcId===pa[0];})){sel={kind:'arc',id:pa[0]};renderInspector();dirty();}
-  else if(newWalls.length)setSelWalls(newWalls);else if(sels.length===1){sel=sels[0];renderInspector();dirty();}
-  toast('Pasted. Drag it to adjust, or press Ctrl+V to place another copy.');}
+  else if(newWalls.length)setSelWalls(newWalls);else if(newElec.length&&!sels.length)setSelElecs(newElec);else if(sels.length===1){sel=sels[0];renderInspector();dirty();}
+  if(!skipped)toast('Pasted. Drag it to adjust, or press Ctrl+V to place another copy.');}
+// an electrical part moved by off: wall-mounted ones go onto the wall nearest their new spot (null if there is none)
+function elecPasted(E,off){const n=clone(E);delete n._p;delete n.id;
+  if(E.a){n.a=add(E.a,off).map(v=>Math.round(v*10)/10);n.b=add(E.b,off).map(v=>Math.round(v*10)/10);return n;}
+  if(E._p){const sl=wallSlot(add(E._p,off),80);if(!sl)return null;return Object.assign(n,sl);}
+  n.x=Math.round((E.x+off[0])*10)/10;n.y=Math.round((E.y+off[1])*10)/10;return n;}
 function drawPasteGhost(){if(!clip||!pasteOff)return;
+  if(!openingOnly())(clip.elec||[]).forEach(E=>{const n=elecPasted(E,pasteOff);if(n)drawElecItem(Object.assign(n,{id:'ghost'}),false,true);else{const q=toS(add(E._p,pasteOff));ctx.save();ctx.strokeStyle=C.danger;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(q[0],q[1],6,0,Math.PI*2);ctx.stroke();ctx.restore();}});
   if(openingOnly()){const o=clip.openings[0];drawOpening(Object.assign({},o,{wall:pasteOff.wall.id,s:pasteOff.s}),true);return;}
   const off=pasteOff;ctx.save();ctx.globalAlpha=.8;
   clip.walls.forEach(w=>{const d=wallDir(w),n=perp(d),h=w.t/2,a=add(w.a,off),b=add(w.b,off);const q=[add(a,mul(n,h)),add(b,mul(n,h)),add(b,mul(n,-h)),add(a,mul(n,-h))].map(toS);
@@ -1985,7 +1997,7 @@ function bindInspector(){
     {const st=$('#oStyle');if(st)st.onchange=()=>{mutate(()=>{if(st.value==='swing')delete o.style;else o.style=st.value;});renderInspector();};}
     const fb=$('#flipBtn');if(fb)fb.onclick=()=>mutate(()=>o.flip^=1);const hb=$('#hingeBtn');if(hb)hb.onclick=()=>mutate(()=>o.hinge^=1);}
   if(sel&&sel.kind==='elec'){const E=elecById(sel.id);if(E)bindElecPanel(E);}
-  if(sel&&sel.kind==='elecs'){const db=$('#delBtn');if(db)db.onclick=()=>deleteSel();}
+  if(sel&&sel.kind==='elecs'){const db=$('#delBtn');if(db)db.onclick=()=>deleteSel();const cb=$('#copyBtn');if(cb)cb.onclick=()=>copySel();}
   if(sel&&sel.kind==='item'){const it=M.items.find(x=>x.id===sel.id);
     const setDim=(k,v,min)=>{const x=len(v,min);if(x!==null)mutate(()=>{
       if(k==='d'){const back=add([it.x,it.y],rotV([0,-it.d/2],it.r));it.d=x;const c=add(back,rotV([0,x/2],it.r));it.x=c[0];it.y=c[1];}else it[k]=x;});renderInspector();};
@@ -2657,8 +2669,8 @@ function elecGroupMove(drag,p){let dv=sub(p,drag.p0);if(snapOn&&!shiftDown)dv=[M
 function elecNudge(ids,v,step){ids.forEach(id=>{const E=elecById(id);if(!E)return;const E0=JSON.parse(JSON.stringify(E));
   if(E.wall){const w=wallById(E.wall);if(!w)return;const a=dot(v,wallDir(w));if(Math.abs(a)>0.5)E.s=clamp(E.s+Math.sign(a)*step,0,wallLen(w));return;}elecShift(E,E0,mul(v,step));});}
 function elecsPanelHTML(ids){const c={};ids.forEach(id=>{const E=elecById(id);if(E)c[E.type]=(c[E.type]||0)+1;});
-  return `<div class="selname">${ids.length} electrical parts<span class="selbtns"><button class="btn" id="delBtn">Delete</button></span></div><div class="kv">${Object.keys(c).map(k=>`<label>${ELEC[k].label}</label><span class="ro">× ${c[k]}</span>`).join('')}</div>
-    <p class="tip">Drag any of them to move them all, or use the arrow keys. <kbd>Ctrl</kbd>/<kbd>Shift</kbd>+click adds or removes one; <kbd>Del</kbd> deletes them.</p>`;}
+  return `<div class="selname">${ids.length} electrical parts<span class="selbtns"><button class="btn" id="copyBtn">Copy</button><button class="btn" id="delBtn">Delete</button></span></div><div class="kv">${Object.keys(c).map(k=>`<label>${ELEC[k].label}</label><span class="ro">× ${c[k]}</span>`).join('')}</div>
+    <p class="tip">Drag any of them to move them all, or use the arrow keys. <kbd>Ctrl</kbd>/<kbd>Shift</kbd>+click adds or removes one; <kbd>Ctrl+C</kbd> / <kbd>Ctrl+V</kbd> copies and pastes them; <kbd>Del</kbd> deletes them.</p>`;}
 // distances from a point to the nearest wall faces, along x and y (or along given directions)
 function rayToWall(p,dir){let best=null,bt=1e12;M.walls.forEach(w=>{[[0,wallLen(w)]].forEach(([s0,s1])=>{const q=pieceQuad(w,s0,s1);   // whole wall: measure to the face even across doors and windows
     for(let i=0;i<4;i++){const a=q[i],b=q[(i+1)%4],e=sub(b,a),den=cross(dir,e);if(Math.abs(den)<1e-9)continue;const t=cross(sub(a,p),e)/den,u=cross(sub(a,p),dir)/den;
@@ -2696,7 +2708,7 @@ function elecDragMove(drag,p){const E=elecById(drag.id),E0=drag.e0;if(!E||!E0)re
   const sn=snapPoint(add([E0.x,E0.y],dv),null);E.x=sn.p[0];E.y=sn.p[1];drag.snap={kind:'move'};}
 // ---- side panel
 function elecPanelHTML(E,field){const D=ELEC[E.type];const same=Object.keys(ELEC).filter(k=>ELEC[k].mount===D.mount&&ELEC[k].group===D.group);
-  let h=`<div class="selname">${D.label}<span class="selbtns"><button class="btn" id="delBtn">Delete</button></span></div><div class="kv">`;
+  let h=`<div class="selname">${D.label}<span class="selbtns"><button class="btn" id="copyBtn">Copy</button><button class="btn" id="delBtn">Delete</button></span></div><div class="kv">`;
   if(same.length>1)h+=`<label for="eType">Type</label><select id="eType">${same.map(k=>`<option value="${k}"${k===E.type?' selected':''}>${ELEC[k].label}</option>`).join('')}</select>`;
   if(E.type==='switch')h+=`<label>Gangs</label><div class="seg segsm" role="group" aria-label="Number of switches">${[1,2,3,4].map(g=>`<button data-gang="${g}" aria-pressed="${(E.gangs||1)===g}">${g}</button>`).join('')}</div>`;
   if(E.type==='socket')h+=`<label>Outlets</label><div class="seg segsm" role="group" aria-label="Single or double"><button data-dbl="0" aria-pressed="${!E.dbl}">Single</button><button data-dbl="1" aria-pressed="${!!E.dbl}">Double</button></div>`;
@@ -2713,7 +2725,7 @@ function bindElecPanel(E){const on=(id,fn)=>{const e=document.getElementById(id)
   on('eH',v=>{const L=parseLen(v);if(L>=0)mutate(()=>E.h=L);renderInspector();});
   on('eDrop',v=>{const L=parseLen(v);if(L>=0)mutate(()=>E.drop=L);renderInspector();});
   on('eLabel',v=>{mutate(()=>{E.label=v.trim()||undefined;});renderInspector();});
-  const db=$('#delBtn');if(db)db.onclick=()=>deleteSel();}
+  const db=$('#delBtn');if(db)db.onclick=()=>deleteSel();const cb=$('#copyBtn');if(cb)cb.onclick=()=>copySel();}
 function elecToolPanel(){const D=ELEC[placeType];if(!D)return '';
   const how=D.mount==='wall'?'Click on a wall face where it goes. It sits on the side you click.':D.mount==='line'?(stripStart?'Click where the strip ends (Shift for any angle).':'Click where the strip starts.'):'Click where it goes.';
   return `<p class="h">New ${D.label.toLowerCase()}</p><p class="tip">${how} Heights and labels can be changed afterwards in its side panel.</p>`;}
