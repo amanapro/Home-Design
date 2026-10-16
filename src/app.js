@@ -655,7 +655,7 @@ function dimLine(a,b,n,offMm,label,color){if(!MEAS.edit&&!dimLine.force)return;
   const len=Math.hypot(sb[0]-sa[0],sb[1]-sa[1]);if(len<24)return;
   const m=[(sa[0]+sb[0])/2,(sa[1]+sb[1])/2];txt(label,m,{rot:ang,mono:true,size:10.5,color:color||C.dim,halo:C.paper,base:'middle'});}
 // which measurements show on the plan (Measures menu); kept per device
-const MEAS_DEF={ext:true,walls:false,openings:false,edit:true,rooms:true,areas:true,kept:true};
+const MEAS_DEF={ext:true,walls:false,openings:false,edit:true,rooms:true,areas:true,kept:true,epinfo:true};
 let MEAS=Object.assign({},MEAS_DEF);try{const v=JSON.parse(localStorage.getItem('bm-meas')||'null');if(v)Object.assign(MEAS,v);else if(localStorage.getItem('bm-dims')==='0')MEAS.ext=false;}catch(e){}
 function saveMeas(){try{localStorage.setItem('bm-meas',JSON.stringify(MEAS));}catch(e){}}
 function exteriorDims(){
@@ -3962,7 +3962,7 @@ function tubeLen(t){return pathLen(epPath(t))*(1+epSet().spare/100);}
 // outer diameter of a cable (mm), roughly: insulated cores laid up plus a sheath
 function cableOD(w){const d1=2*Math.sqrt(wireMM2(w)/Math.PI)+1.6,n=clamp(w.cores||1,1,5);return d1*[1,1,2,2.16,2.42,2.7][n]+(n>1?2:0);}
 function tubeFill(t){const wa=(t.wires||[]).map(epWire).filter(Boolean).reduce((a,w)=>a+Math.PI/4*cableOD(w)**2,0);const di=t.dia*0.85;return wa/(Math.PI/4*di*di);}
-const refName=r=>{if(!r)return '—';if(r.k==='e'){const E=elecById(r.id);return E?(E.label?E.label+' ':'')+ELEC[E.type].label:'—';}const d=epDev(r.id);return d?(d.name||EPDEV[d.type].label):'—';};
+const refName=r=>{if(!r)return '—';if(r.k==='e'){const E=elecById(r.id);if(!E)return '—';const rm=roomAt(elecPos(E)||[0,0]);return (E.label?E.label+' ':'')+ELEC[E.type].label+(rm&&rm.name?' · '+rm.name:'');}const d=epDev(r.id);return d?(d.name||EPDEV[d.type].label):'—';};
 const nextName=(arr,pre)=>{let n=arr.length+1;const has=new Set(arr.map(x=>x.name));while(has.has(pre+n))n++;return pre+n;};
 
 // ---- availability, entering and leaving
@@ -3983,6 +3983,8 @@ function epSetKind(k){if(!eMode)return;epKind=k;epDraw=null;epGhost=null;setTool
 
 // ---- drawing
 const epPx=()=>clamp(view.s*190,8,16);
+const epInfo=(o,on)=>MEAS.epinfo||!!o.info||!!on;   // Measures › Electric plan info, or this item's own "show its info"
+const refKey=r=>r?(r.k+':'+r.id):'';const keyRef=k=>k?{k:k.split(':')[0],id:k.split(':')[1]}:null;
 function epDrawDev(d,on,faded){const D=EPDEV[d.type];if(!D)return;ctx.save();if(faded)ctx.globalAlpha=0.32;const s=epPx();
   const font=w=>(w||600)+' '+Math.round(s*0.62)+'px '+getComputedStyle(document.body).fontFamily;
   if(d.type==='pv'){const n=Math.max(1,d.count||1),cols=Math.max(1,d.cols||Math.ceil(n/2)),rows=Math.ceil(n/cols),pw=1134,ph=1722,W=cols*pw,H=rows*ph;
@@ -3990,7 +3992,7 @@ function epDrawDev(d,on,faded){const D=EPDEV[d.type];if(!D)return;ctx.save();if(
     for(let i=0;i<n;i++){const cx=(i%cols)*pw-W/2,cy=Math.floor(i/cols)*ph-H/2;ctx.fillStyle='#1d3d6e';ctx.strokeStyle='#9fb4d6';ctx.fillRect(cx*k+1,cy*k+1,pw*k-2,ph*k-2);ctx.strokeRect(cx*k+1,cy*k+1,pw*k-2,ph*k-2);
       if(pw*k>14){ctx.beginPath();for(let j=1;j<3;j++){ctx.moveTo((cx+pw*j/3)*k,cy*k+2);ctx.lineTo((cx+pw*j/3)*k,(cy+ph)*k-2);}ctx.moveTo(cx*k+2,(cy+ph/2)*k);ctx.lineTo((cx+pw)*k-2,(cy+ph/2)*k);ctx.strokeStyle='rgba(159,180,214,.6)';ctx.stroke();}}
     if(on){ctx.strokeStyle=C.accent;ctx.lineWidth=2;ctx.setLineDash([5,3]);ctx.strokeRect(-W/2*k-4,-H/2*k-4,W*k+8,H*k+8);ctx.setLineDash([]);}
-    ctx.restore();if(!faded)txt((d.name||'PV')+' · '+n+' × '+(d.watt||450)+' W',add(toS([d.x,d.y]),[0,0]),{weight:'600',size:11,color:'#fff',halo:'#1d3d6e'});return;}
+    ctx.restore();if(!faded&&epInfo(d,on))txt((d.name||'PV')+' · '+n+' × '+(d.watt||450)+' W',add(toS([d.x,d.y]),[0,0]),{weight:'600',size:11,color:'#fff',halo:'#1d3d6e'});return;}
   const q=toS(epDevPos(d));let ang=0;if(D.mount==='wall'&&d.wall){const P=elecWallPos(d);if(P)ang=Math.atan2(P.n[1],P.n[0])+Math.PI/2;}
   ctx.translate(q[0],q[1]);ctx.rotate(ang);
   if(d.type==='jbox'){const r=s*0.55;ctx.fillStyle=C.paper;ctx.strokeStyle='#495057';ctx.lineWidth=1.6;ctx.fillRect(-r,-r,2*r,2*r);ctx.strokeRect(-r,-r,2*r,2*r);ctx.beginPath();ctx.arc(0,0,r*0.35,0,Math.PI*2);ctx.fillStyle='#495057';ctx.fill();}
@@ -4000,13 +4002,14 @@ function epDrawDev(d,on,faded){const D=EPDEV[d.type];if(!D)return;ctx.save();if(
     ctx.rotate(-ang);ctx.fillStyle='#fff';ctx.font=font(700);ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(d.type==='meter'?'kWh':d.type==='inverter'?'~ INV':D.short,0,0);ctx.rotate(ang);}
   ctx.restore();
   if(on){ctx.save();ctx.strokeStyle=C.accent;ctx.lineWidth=2;ctx.setLineDash([3,2]);ctx.beginPath();ctx.arc(q[0],q[1],s*1.6,0,Math.PI*2);ctx.stroke();ctx.restore();}
-  if(!faded){let lab=d.name||'';if(d.type==='panel')lab+=' · '+(d.main||63)+' A · '+(d.brk||[]).length+' breakers';if(d.type==='inverter')lab+=' · '+(d.kw||5)+' kW';if(d.type==='battery')lab+=' · '+(d.kwh||10)+' kWh';if(d.type==='dciso')lab+=' · '+(d.amps||32)+' A DC';
-    if(lab)txt(lab,[q[0],q[1]+s*1.9],{weight:'600',size:10.5,color:C.ink,halo:C.paper});}}
+  if(!faded&&epInfo(d,on)){let lab=d.name||'';if(d.type==='panel')lab+=' · '+(d.main||63)+' A · '+(d.brk||[]).length+' breakers';if(d.type==='inverter')lab+=' · '+(d.kw||5)+' kW';if(d.type==='battery')lab+=' · '+(d.kwh||10)+' kWh';if(d.type==='dciso')lab+=' · '+(d.amps||32)+' A DC';
+    if(lab)txt(lab,[q[0],q[1]+s*1.9],{weight:'600',size:10.5,color:C.ink,halo:C.paper});
+    if(d.type==='panel')(d.brk||[]).slice(0,12).forEach((b,i)=>txt((b.name||'Breaker')+' '+b.amps+' A '+(b.poles||1)+'P'+(b.to?' → '+refName(keyRef(b.to)):''),[q[0],q[1]+s*1.9+14+i*13],{size:10,color:C.muted,halo:C.paper,mono:true}));}}
 function epStrokePath(P){ctx.beginPath();P.forEach((p,i)=>{const s=toS(p);i?ctx.lineTo(s[0],s[1]):ctx.moveTo(s[0],s[1]);});}
 function epDrawTube(t,on,faded){const P=epPath(t);if(P.length<2)return;ctx.save();if(faded)ctx.globalAlpha=0.28;const wpx=Math.max(7,t.dia*view.s);
   ctx.lineCap='round';ctx.lineJoin='round';epStrokePath(P);ctx.strokeStyle=on?C.accent:'#868e96';ctx.lineWidth=wpx+2;ctx.stroke();
   epStrokePath(P);ctx.strokeStyle=t.type&&t.type.startsWith('HDPE')?'#ffe8cc':t.type&&t.type.startsWith('Metal')?'#dee2e6':'#e9ecef';ctx.lineWidth=wpx;ctx.stroke();ctx.restore();
-  if(!faded){const m=pathMid(P),fl=tubeFill(t);const q=toS(add(m.p,mul(perp(m.d),Math.max(t.dia,22/view.s))));
+  if(!faded&&epInfo(t,on)){const m=pathMid(P),fl=tubeFill(t);const q=toS(add(m.p,mul(perp(m.d),Math.max(t.dia,22/view.s))));
     txt((t.name||'')+' Ø'+t.dia+' · '+(t.wires||[]).length+((t.wires||[]).length===1?' wire · ':' wires · ')+fmtRun(tubeLen(t))+' '+runU()+(fl>0?' · '+Math.round(fl*100)+'%':''),q,{size:10,weight:'500',color:fl>0.4?C.danger:'#495057',halo:C.paper});}
   if(on)epHandles(t);}
 function epDrawWire(w,on,faded){const P=epPath(w);if(P.length<2)return;ctx.save();if(faded)ctx.globalAlpha=0.3;ctx.lineCap='round';ctx.lineJoin='round';
@@ -4018,7 +4021,7 @@ function epDrawWire(w,on,faded){const P=epPath(w);if(P.length<2)return;ctx.save(
     ctx.beginPath();if(c==='wago'||c==='term')ctx.rect(s[0]-4,s[1]-4,8,8);else if(c==='nut'){ctx.moveTo(s[0],s[1]-5);ctx.lineTo(s[0]+5,s[1]+4);ctx.lineTo(s[0]-5,s[1]+4);ctx.closePath();}
     else if(c==='mc4'||c==='lug'){ctx.moveTo(s[0],s[1]-5);ctx.lineTo(s[0]+5,s[1]);ctx.lineTo(s[0],s[1]+5);ctx.lineTo(s[0]-5,s[1]);ctx.closePath();}else ctx.arc(s[0],s[1],4,0,Math.PI*2);ctx.fill();ctx.stroke();});
   ctx.restore();
-  if(!faded){const m=pathMid(P),L=wireLens(w);const n=perp(m.d);const q=toS(add(m.p,mul(n,16/view.s)));let a=Math.atan2(m.d[1],m.d[0]);if(a>Math.PI/2)a-=Math.PI;if(a<-Math.PI/2)a+=Math.PI;
+  if(!faded&&epInfo(w,on)){const m=pathMid(P),L=wireLens(w);const n=perp(m.d);const q=toS(add(m.p,mul(n,16/view.s)));let a=Math.atan2(m.d[1],m.d[0]);if(a>Math.PI/2)a-=Math.PI;if(a<-Math.PI/2)a+=Math.PI;
     txt((w.name?w.name+' ':'')+(w.kind==='dc'?'DC':'AC')+' '+wireSizeTxt(w)+' '+(w.cores||1)+'C · '+fmtRun(L.total)+' '+runU(),q,{size:10,weight:'600',color:wireColor(w),halo:C.paper,rot:a});}
   if(on)epHandles(w);}
 function epHandles(o){const Q=epPts(o);Q.forEach((p,i)=>{const s=toS(p),end=i===0||i===Q.length-1;ctx.save();ctx.fillStyle=end?C.paper:C.accent;ctx.strokeStyle=C.accent;ctx.lineWidth=1.6;
@@ -4132,6 +4135,12 @@ function epKey(e,k){if(!eMode)return false;const tag=(e.target.tagName||'').toLo
 
 function epHint(t,k){if(t==='eplan'){if(k==='wire_ac'||k==='wire_dc'||k==='tube')return 'Click to start, click to add bend points; end on a part, or double-click / <kbd>Enter</kbd>. <kbd>Backspace</kbd> removes the last point, <kbd>Esc</kbd> cancels.';return 'Click to place it. <kbd>Esc</kbd> goes back to the Pointer.';}
   return 'Electric plan: click a wire, conduit or part to edit it. Drag points to reshape a run; double-click a wire to add a bend point. <kbd>Del</kbd> deletes. The home plan is locked.';}
+function epFeedOptions(cur){const E=epD();const jb=E.devs.filter(d=>d.type==='jbox'),oth=E.devs.filter(d=>d.type!=='jbox'&&d.type!=='panel'&&d.type!=='pv');
+  const el=(M.elec||[]).filter(x=>x.type!=='strip'||true);
+  return opt('',cur||'','— not set —')+(jb.length?`<optgroup label="Junction boxes">${jb.map(d=>opt('d:'+d.id,cur,d.name||'Junction box')).join('')}</optgroup>`:'')
+    +(oth.length?`<optgroup label="Other parts">${oth.map(d=>opt('d:'+d.id,cur,(d.name?d.name+' · ':'')+EPDEV[d.type].label)).join('')}</optgroup>`:'')
+    +(el.length?`<optgroup label="Straight to a light, switch or socket">${el.map(x=>opt('e:'+x.id,cur,refName({k:'e',id:x.id}))).join('')}</optgroup>`:'');}
+function epInfoRow(o){return `<label class="epinfo"><input type="checkbox" id="epInfo"${o.info||MEAS.epinfo?' checked':''}${MEAS.epinfo?' disabled':''}> <span>Show its info on the plan${MEAS.epinfo?'<small>All electric info is on (Measures menu). Turn that off to show only the items you pick.</small>':''}</span></label>`;}
 // ---- side panel
 const opt=(v,cur,lab)=>`<option value="${esc(String(v))}"${String(v)===String(cur)?' selected':''}>${esc(lab!=null?lab:String(v))}</option>`;
 function epToolPanel(){const names={wire_ac:'AC wire',wire_dc:'DC wire',tube:'Conduit'};
@@ -4144,7 +4153,7 @@ function epInspectorHTML(){
   if(tool==='eplan')return epToolPanel();
   if(!sel||sel.kind!=='ep')return `<p class="h">Electric plan</p><p class="empty">The home plan and its lights, switches and sockets are locked here. Pick a wiring tool on the left, or select a wire, conduit or part to edit it. Double-click a wire to add a bend point.</p>
     <div class="kv"><label>Wire sizes</label><div class="seg segsm" role="group" aria-label="Wire size standard"><button data-epstd="mm2" aria-pressed="${epSet().std==='mm2'}">mm²</button><button data-epstd="awg" aria-pressed="${epSet().std==='awg'}">AWG</button></div></div>
-    <p class="tip">Back to the home plan: press <b>Plan</b> (or any view) above.</p>`;
+    <p class="tip"><b>Breakers</b>: click the breaker panel (DB) on the plan with the Pointer; its breakers (name, size, poles, type, and the junction box each one feeds) are listed here. Names, sizes and lengths on the plan: <b>Measures</b> menu › Electric plan.</p><p class="tip">Back to the home plan: press <b>Plan</b> (or any view) above.</p>`;
   const s=sel;
   if(s.t==='wire'){const w=epWire(s.id);if(!w)return '';const L=wireLens(w);const tubes=epD().tubes.filter(t=>(t.wires||[]).includes(w.id));
     const panels=[w.ea,w.eb].map(r=>r&&r.k==='d'&&epDev(r.id)).filter(d=>d&&d.type==='panel');const brks=(panels.length?panels:epD().devs.filter(d=>d.type==='panel')).flatMap(p=>(p.brk||[]).map(b=>({p,b})));
@@ -4164,7 +4173,7 @@ function epInspectorHTML(){
       <label>On the plan</label><span class="ro">${fmtLen(L.plan,true)}</span>
       <label>Up / down</label><span class="ro">${fmtLen(L.drops,true)}</span>
       <label>With ${epSet().spare}% spare</label><span class="ro big">${fmtLen(L.total,true)}</span>
-      <label>In conduit</label><span class="ro" style="font-family:var(--f-body)">${tubes.length?tubes.map(t=>esc(t.name)+' Ø'+t.dia).join(', '):'—'}</span></div>
+      <label>In conduit</label><span class="ro" style="font-family:var(--f-body)">${tubes.length?tubes.map(t=>esc(t.name)+' Ø'+t.dia).join(', '):'—'}</span></div>${epInfoRow(w)}
       <p class="tip">Drag a point to move it, drag the line to pull out a new bend point, double-click a bend point to remove it. Drag an end onto a light, switch, socket or panel to connect it. "Up / down" is the run from the ceiling or floor to each end's height.</p>`;}
   if(s.t==='tube'){const t=epTube(s.id);if(!t)return '';const fl=tubeFill(t);
     return `<div class="selname">Conduit ${esc(t.name||'')}<span class="selbtns"><button class="btn" id="epDel">Delete</button></span></div><div class="kv">
@@ -4173,11 +4182,11 @@ function epInspectorHTML(){
       <label for="epDia">Diameter</label><select id="epDia">${TUBE_DIAS.map(v=>opt(v,t.dia,v+' mm')).join('')}</select>
       <label>Length</label><span class="ro big">${fmtLen(tubeLen(t),true)}</span>
       <label>Fill</label><span class="ro" style="color:${fl>0.4?'var(--danger)':'inherit'}">${Math.round(fl*100)}%${fl>0.4?' (over 40%: use a bigger conduit)':''}</span>
-      <label>Shape</label><div class="seg segsm" role="group" aria-label="Curved or straight"><button data-smooth="1" aria-pressed="${!!t.smooth}">Curved</button><button data-smooth="0" aria-pressed="${!t.smooth}">Straight</button></div></div>
+      <label>Shape</label><div class="seg segsm" role="group" aria-label="Curved or straight"><button data-smooth="1" aria-pressed="${!!t.smooth}">Curved</button><button data-smooth="0" aria-pressed="${!t.smooth}">Straight</button></div></div>${epInfoRow(t)}
       <p class="h" style="margin-top:10px">Wires inside</p><div class="epchk">${epD().wires.length?epD().wires.map(w=>`<label><input type="checkbox" data-tw="${w.id}"${(t.wires||[]).includes(w.id)?' checked':''}> <span style="color:${wireColor(w)};font-weight:600">${esc(w.name||'')}</span> ${w.kind==='dc'?'DC':'AC'} ${wireSizeTxt(w)} ${w.cores||1}C</label>`).join(''):'<p class="empty">No wires yet.</p>'}</div>
       <p class="tip">Length includes the ${epSet().spare}% spare. Fill compares the cables' cross-section with the inside of the conduit.</p>`;}
   const d=epDev(s.id);if(!d)return '';const D=EPDEV[d.type];
-  let h=`<div class="selname">${D.label}<span class="selbtns"><button class="btn" id="epDel">Delete</button></span></div><div class="kv"><label for="epName">Name</label><input id="epName" data-type="text" style="font-family:var(--f-body)" value="${esc(d.name||'')}">`;
+  let h=`<div class="selname">${D.label}<span class="selbtns"><button class="btn" id="epDel">Delete</button></span></div>${epInfoRow(d)}<div class="kv"><label for="epName">Name</label><input id="epName" data-type="text" style="font-family:var(--f-body)" value="${esc(d.name||'')}">`;
   const num=(lab,id,v,unit)=>`<label for="${id}">${lab}</label><input id="${id}" data-type="num" value="${v}"${unit?` placeholder="${unit}"`:''}>`;
   if(D.mount==='wall')h+=field('Height to centre','epH',fmtLen(d.h!=null?d.h:D.h));
   if(d.type==='panel'){h+=`<label for="epMain">Main breaker</label><select id="epMain">${BRK_AMPS.map(a=>opt(a,d.main||63,a+' A')).join('')}</select>
@@ -4187,9 +4196,11 @@ function epInspectorHTML(){
       ${field('Feed length','epFeedLen',fmtLen(d.feedLen||0))}</div>
       <p class="h" style="margin-top:10px">Breakers</p><div class="brks">
       ${(d.brk||[]).map((b,i)=>`<div class="brk"><input data-bk="${i}" data-f="name" value="${esc(b.name||'')}" placeholder="Name, e.g. Kitchen" aria-label="Breaker name"><button class="btn" data-bkdel="${i}" aria-label="Remove breaker">×</button>
-        <select data-bk="${i}" data-f="amps" aria-label="Size">${BRK_AMPS.map(a=>opt(a,b.amps,a+' A')).join('')}</select><select data-bk="${i}" data-f="poles" aria-label="Poles">${[1,2,3].map(n=>opt(n,b.poles||1,n+'P')).join('')}</select><select data-bk="${i}" data-f="type" aria-label="Type">${BRK_TYPES.map(v=>opt(v,b.type||'MCB')).join('')}</select></div>`).join('')||'<p class="empty">No breakers yet.</p>'}</div>
+        <select data-bk="${i}" data-f="amps" aria-label="Size">${BRK_AMPS.map(a=>opt(a,b.amps,a+' A')).join('')}</select><select data-bk="${i}" data-f="poles" aria-label="Poles">${[1,2,3].map(n=>opt(n,b.poles||1,n+'P')).join('')}</select><select data-bk="${i}" data-f="type" aria-label="Type">${BRK_TYPES.map(v=>opt(v,b.type||'MCB')).join('')}</select>
+        <label class="brkto"><span>Feeds</span><select data-bk="${i}" data-f="to" aria-label="What this breaker feeds">${epFeedOptions(b.to)}</select></label>
+        <span class="brkw">${(()=>{const ws=epD().wires.filter(w=>w.circuit===b.id);return ws.length?'Wire'+(ws.length>1?'s':'')+': '+ws.map(w=>esc(w.name)+' ('+wireSizeTxt(w)+')').join(', '):'No wire on this breaker yet';})()}</span></div>`).join('')||'<p class="empty">No breakers yet.</p>'}</div>
       <div class="rowbtns"><button class="btn" id="epAddBrk">Add breaker</button><button class="btn" id="epAddSolar">Add solar breaker</button></div>
-      <p class="tip">Wires connected to this panel pick their breaker in the wire's panel (Circuit). A solar breaker takes the AC feed from the inverter.</p>`;return h;}
+      <p class="tip">For each breaker: its name, size (A), poles, type, and <b>Feeds</b>: the junction box (or part) it supplies. A wire drawn from this panel to that junction box goes on the breaker by itself; any wire can also be put on a breaker with <b>Circuit</b> in the wire's panel. A solar breaker takes the AC feed from the inverter.</p>`;return h;}
   if(d.type==='pv')h+=num('Panels','epCount',d.count||8)+num('Per row','epCols',d.cols||4)+num('Watts each','epWatt',d.watt||450)+num('Turn (°)','epRot',d.r||0)+`<label>Total</label><span class="ro big">${((d.count||8)*(d.watt||450)/1000).toFixed(2)} kWp</span>`;
   if(d.type==='dciso')h+=`<label for="epAmps">Rating</label><select id="epAmps">${[16,20,25,32,40,50,63].map(a=>opt(a,d.amps||32,a+' A')).join('')}</select>`+num('Volts DC','epVolts',d.volts||1000);
   if(d.type==='inverter')h+=num('Power (kW)','epKw',d.kw||5);
@@ -4202,10 +4213,12 @@ function epBindInspector(){const el=$('#inspector');const ed=fn=>{mutate(fn);ren
   const on=(id,fn)=>{const e=document.getElementById(id);if(e)e.onchange=()=>fn(e.value);};
   const dl=$('#epDel');if(dl)dl.onclick=()=>epDelete();
   on('epName',v=>ed(()=>o.name=v.trim()||o.name));
+  {const c=$('#epInfo');if(c)c.onchange=()=>ed(()=>{if(c.checked)o.info=true;else delete o.info;});}
   el.querySelectorAll('[data-smooth]').forEach(b=>b.onclick=()=>ed(()=>o.smooth=b.dataset.smooth==='1'));
   if(s.t==='wire'){el.querySelectorAll('[data-epkind]').forEach(b=>b.onclick=()=>ed(()=>{o.kind=b.dataset.epkind;if(o.kind==='dc'&&o.cores===3)o.cores=2;if(o.kind==='ac'&&o.cores===2)o.cores=3;}));
     el.querySelectorAll('[data-wstd]').forEach(b=>b.onclick=()=>ed(()=>{if(o.std===b.dataset.wstd)return;const a=wireMM2(o);o.std=b.dataset.wstd;const L=WIRE_SIZES[o.std];o.size=o.std==='awg'?L.reduce((x,y)=>Math.abs(AWG_MM2[y]-a)<Math.abs(AWG_MM2[x]-a)?y:x):L.reduce((x,y)=>Math.abs(+y-a)<Math.abs(+x-a)?y:x);}));
-    on('epSize',v=>ed(()=>o.size=v));on('epCores',v=>ed(()=>o.cores=+v));on('epRoute',v=>ed(()=>o.route=v));on('epCa',v=>ed(()=>o.ca=v));on('epCb',v=>ed(()=>o.cb=v));on('epCirc',v=>ed(()=>o.circuit=v||undefined));}
+    on('epSize',v=>ed(()=>o.size=v));on('epCores',v=>ed(()=>o.cores=+v));on('epRoute',v=>ed(()=>o.route=v));on('epCa',v=>ed(()=>o.ca=v));on('epCb',v=>ed(()=>o.cb=v));on('epCirc',v=>ed(()=>{o.circuit=v||undefined;if(!v)return;const pn=epD().devs.find(d=>(d.brk||[]).some(b=>b.id===v));const b=pn&&pn.brk.find(b=>b.id===v);
+      if(b&&!b.to){const other=[o.ea,o.eb].find(r=>r&&!(r.k==='d'&&r.id===pn.id));if(other&&[o.ea,o.eb].some(r=>r&&r.k==='d'&&r.id===pn.id))b.to=refKey(other);}}));}
   if(s.t==='tube'){on('epType',v=>ed(()=>o.type=v));on('epDia',v=>ed(()=>o.dia=+v));
     el.querySelectorAll('[data-tw]').forEach(c=>c.onchange=()=>ed(()=>{const L=new Set(o.wires||[]);c.checked?L.add(c.dataset.tw):L.delete(c.dataset.tw);o.wires=[...L];}));}
   if(s.t==='dev'){const nv=(id,fn,mn)=>on(id,v=>{const x=parseFloat(v);if(isFinite(x)&&x>=(mn||0))ed(()=>fn(x));else renderInspector();});
@@ -4214,7 +4227,8 @@ function epBindInspector(){const el=$('#inspector');const ed=fn=>{mutate(fn);ren
     on('epFeedLen',v=>{const L=parseLen(v);if(L>=0)ed(()=>o.feedLen=L);else renderInspector();});
     el.querySelectorAll('[data-fstd]').forEach(b=>b.onclick=()=>ed(()=>{if(o.feedStd===b.dataset.fstd)return;o.feedStd=b.dataset.fstd;o.feedSize=o.feedStd==='awg'?'4':'16';}));
     nv('epCount',x=>o.count=Math.round(x),1);nv('epCols',x=>o.cols=Math.round(x),1);nv('epWatt',x=>o.watt=x,1);nv('epRot',x=>o.r=x);nv('epKw',x=>o.kw=x,0.1);nv('epKwh',x=>o.kwh=x,0.1);nv('epVolts',x=>o.volts=x,1);on('epAmps',v=>ed(()=>o.amps=+v));
-    el.querySelectorAll('[data-bk]').forEach(c=>c.onchange=()=>ed(()=>{const b=o.brk[+c.dataset.bk];const f=c.dataset.f;b[f]=f==='amps'||f==='poles'?+c.value:c.value;}));
+    el.querySelectorAll('[data-bk]').forEach(c=>c.onchange=()=>ed(()=>{const b=o.brk[+c.dataset.bk];const f=c.dataset.f;b[f]=f==='amps'||f==='poles'?+c.value:c.value;
+      if(f==='to'){if(!b.to)delete b.to;else epD().wires.forEach(w=>{const ks=[refKey(w.ea),refKey(w.eb)];if(!w.circuit&&ks.includes('d:'+o.id)&&ks.includes(b.to))w.circuit=b.id;});}}));
     el.querySelectorAll('[data-bkdel]').forEach(c=>c.onclick=()=>ed(()=>{const b=o.brk.splice(+c.dataset.bkdel,1)[0];epD().wires.forEach(w=>{if(w.circuit===b.id)delete w.circuit;});}));
     const ab=$('#epAddBrk');if(ab)ab.onclick=()=>ed(()=>{o.brk=o.brk||[];o.brk.push({id:nid('k'),name:'Circuit '+(o.brk.length+1),amps:16,poles:1,type:'MCB'});});
     const as=$('#epAddSolar');if(as)as.onclick=()=>ed(()=>{o.brk=o.brk||[];o.brk.push({id:nid('k'),name:'Solar',amps:25,poles:2,type:'Solar'});});}}
@@ -4240,15 +4254,18 @@ function epRows(){const E=epD(),rows=[],R=(cat,item,spec,qty,unit)=>rows.push({c
   return rows;}
 function epRuns(){return epD().wires.map(w=>{const L=wireLens(w);const b=w.circuit&&epD().devs.flatMap(d=>(d.brk||[]).map(x=>({d,x}))).find(o=>o.x.id===w.circuit);
   return {name:w.name||'',from:refName(w.ea),to:refName(w.eb),spec:(w.kind==='dc'?'DC ':'AC ')+wireSizeTxt(w)+' '+(w.cores||1)+'C',circuit:b?(b.d.name||'')+' '+(b.x.name||'')+' '+b.x.amps+' A':'',plan:L.plan,drops:L.drops,total:L.total};});}
+function epBreakers(){return epD().devs.filter(d=>d.type==='panel').flatMap(d=>(d.brk||[]).map(b=>({panel:d.name||'DB',name:b.name||'',spec:b.amps+' A '+(b.poles||1)+'P',type:b.type||'MCB',to:b.to?refName(keyRef(b.to)):'',wires:epD().wires.filter(w=>w.circuit===b.id).map(w=>w.name+' '+wireSizeTxt(w)).join(', ')})));}
 function epCSV(){const q=v=>{v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};const u=runU();
   let s='Electric plan worksheet,'+q(M.name||'')+'\nSpare included,'+epSet().spare+'%\n\nCategory,Item,Size / rating,Quantity,Unit,Unit price,Total\n';
   epRows().forEach((r,i)=>{s+=[r.cat,r.item,r.spec,r.qty,r.unit].map(q).join(',')+',,=D'+(i+5)+'*F'+(i+5)+'\n';});
+  {const B=epBreakers();if(B.length){s+='\nBreaker schedule\nPanel,Breaker,Size,Type,Feeds,Wires\n';B.forEach(b=>{s+=[b.panel,b.name,b.spec,b.type,b.to,b.wires].map(q).join(',')+'\n';});}}
   s+='\nWire runs\nName,From,To,Cable,Circuit,On plan ('+u+'),Up/down ('+u+'),Total with spare ('+u+')\n';
   epRuns().forEach(r=>{s+=[r.name,r.from,r.to,r.spec,r.circuit,fmtRun(r.plan),fmtRun(r.drops),fmtRun(r.total)].map(q).join(',')+'\n';});return s;}
 function epSheetHTML(full){const rows=epRows();if(!rows.length)return '<p class="empty">Nothing yet. Draw wires and place the panel, and they are listed here with sizes and lengths.</p>';
   let h=`<table class="qt eptab"><thead><tr><th>Item</th><th>Size</th><th>Qty</th>${full?'<th>Unit price</th><th>Total</th>':''}</tr></thead><tbody>`;let cat='';
   rows.forEach(r=>{if(r.cat!==cat){cat=r.cat;h+=`<tr class="epcat"><td colspan="${full?5:3}">${esc(cat)}</td></tr>`;}h+=`<tr><td>${esc(r.item)}</td><td>${esc(r.spec)}</td><td>${r.qty} ${esc(r.unit)}</td>${full?'<td></td><td></td>':''}</tr>`;});
   h+='</tbody></table>';
+  if(full){const B=epBreakers();if(B.length)h+=`<p class="h" style="margin-top:14px">Breaker schedule</p><table class="qt eptab"><thead><tr><th>Panel</th><th>Breaker</th><th>Size</th><th>Type</th><th>Feeds</th><th>Wires</th></tr></thead><tbody>`+B.map(b=>`<tr><td>${esc(b.panel)}</td><td>${esc(b.name)}</td><td>${esc(b.spec)}</td><td>${esc(b.type)}</td><td>${esc(b.to)}</td><td>${esc(b.wires)}</td></tr>`).join('')+'</tbody></table>';}
   if(full){const runs=epRuns();if(runs.length){h+=`<p class="h" style="margin-top:14px">Wire runs</p><table class="qt eptab"><thead><tr><th>Name</th><th>From → to</th><th>Cable</th><th>Circuit</th><th>Plan</th><th>Up/down</th><th>Total</th></tr></thead><tbody>`+
     runs.map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.from)} → ${esc(r.to)}</td><td>${esc(r.spec)}</td><td>${esc(r.circuit)}</td><td>${fmtRun(r.plan)}</td><td>${fmtRun(r.drops)}</td><td>${fmtRun(r.total)}</td></tr>`).join('')+'</tbody></table>';}}
   return h;}
