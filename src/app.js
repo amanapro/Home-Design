@@ -2682,8 +2682,16 @@ function drawElecDims(E){if(!E||!M.walls.length)return;const col=ELEC_COL.light,
     [[m,[n,mul(n,-1)]],[E.a,[mul(d,-1)]],[E.b,[d]]].forEach(([p,ds])=>{const q=nearestAlong(p,ds);if(q&&dist(p,q)>5)drawMeasure(p,q,col,o);});return;}
   const p=[E.x,E.y];[[[1,0],[-1,0]],[[0,1],[0,-1]]].forEach(ds=>{const q=nearestAlong(p,ds);if(q&&dist(p,q)>5)drawMeasure(p,q,col,o);});}
 function drawElecLayer(){if(!elecOn||!M.elec)return;const ids=new Set(elecSelIds());M.elec.forEach(E=>drawElecItem(E,ids.has(E.id),false));
-  if(!EXP&&sel&&sel.kind==='elec'){const E=elecById(sel.id);if(E&&!E.wall)drawElecDims(E);}}
+  if(!EXP&&sel&&sel.kind==='elec'){const E=elecById(sel.id);if(E&&!E.wall)drawElecDims(E);if(E)drawLightDist(E,E.id);}}
+// distance from a light to the nearest other light (to a strip light: its nearest point), drawn in purple
+const LIGHT_DIST_COL='#9c36b5';
+function nearestLight(p,skipId){let best=null,bd=1e12;(M.elec||[]).forEach(E=>{if(E.id===skipId||ELEC[E.type].group!=='light')return;const q=E.a?segClosest(p,E.a,E.b).q:elecPos(E);if(!q)return;const d=dist(p,q);if(d<bd){bd=d;best=q;}});return best;}
+function drawLightDist(E,skipId){if(!E||!ELEC[E.type]||ELEC[E.type].group!=='light')return;
+  const pts=E.a?(E.b&&dist(E.a,E.b)>1?[E.a,E.b]:[E.a]):[E.wall?((elecWallPos(E)||{}).p):[E.x,E.y]];
+  let best=null;pts.forEach(p=>{if(!p)return;const q=nearestLight(p,skipId);if(q&&(!best||dist(p,q)<dist(best[0],best[1])))best=[p,q];});
+  if(best&&dist(best[0],best[1])>20)drawMeasure(best[0],best[1],LIGHT_DIST_COL,{width:1.3});}
 function drawElecTool(){if(tool!=='elec')return;
+  if(ELEC[placeType]&&ELEC[placeType].group==='light'){if(placeType==='strip'){const a=stripStart||(elecGhost&&elecGhost.c);if(a)drawLightDist({type:'strip',a,b:stripStart&&elecGhost&&elecGhost.b||a},'ghost');}else if(elecGhost)drawLightDist(elecGhost,'ghost');}
   if(placeType==='strip'&&!stripStart&&elecGhost&&elecGhost.c)drawElecDims({x:elecGhost.c[0],y:elecGhost.c[1]});
   if(placeType==='strip'){if(stripStart){const b=elecGhost&&elecGhost.b||stripStart;drawElecItem({type:'strip',a:stripStart,b},true,true);if(dist(stripStart,b)>50)drawElecDims({a:stripStart,b});const L=dist(stripStart,b);if(L>1){const m=toS(mul(add(stripStart,b),.5));txt(fmtLen(L,true),[m[0],m[1]-14],{weight:'600',size:11,color:ELEC_COL.light});}}return;}
   if(elecGhost){drawElecItem(elecGhost,false,true);if(elecGhost.x!=null)drawElecDims(elecGhost);}}
@@ -4104,8 +4112,8 @@ function epDrawTool(){if(tool!=='eplan')return;
 
 // ---- snapping wire ends to lights, switches, sockets and wiring parts
 // A spot light takes one wire; a strip light takes one wire at each end (two in all), right on the end point.
-// how many wires a light takes: a spot light two (power in, and on to the next light); a strip light one at each end
-const EP_MAX={spot:2};var epBlocked=null;
+// how many wires a light takes: two (power in, and on to the next light); a strip light one at each end
+const EP_MAX={spot:2,chandelier:2,wall:2,garden:2};var epBlocked=null;
 const lightKey=r=>r.id+(r.end?':'+r.end:'');
 function epUsedLights(skipWire,extra){const u=new Map(),add=r=>{if(r&&r.k==='e'){const k=lightKey(r);u.set(k,(u.get(k)||0)+1);}};epD().wires.forEach(w=>{if(w.id===skipWire)return;[w.ea,w.eb].forEach(add);});(extra||[]).forEach(add);return u;}
 function epSnapRef(p,skipWire,extra){const tol=(ptrTouch?22:14)/view.s;let best=null,bd=tol;const used=epUsedLights(skipWire,extra);epBlocked=null;
@@ -4117,7 +4125,7 @@ function epSnapRef(p,skipWire,extra){const tol=(ptrTouch?22:14)/view.s;let best=
   if(best)epBlocked=null;
   epD().devs.forEach(d=>{if(d.type==='pv'){const n=Math.max(1,d.count||1),cols=Math.max(1,d.cols||Math.ceil(n/2)),rows=Math.ceil(n/cols);const hw=cols*1134/2,hh=rows*1722/2;const l=rotV(sub(p,[d.x,d.y]),-(d.r||0));if(Math.abs(l[0])<hw&&Math.abs(l[1])<hh&&!best)best={ref:{k:'d',id:d.id},p:[d.x,d.y]};return;}
     const q=epDevPos(d);if(dist(p,q)<bd*1.4){bd=dist(p,q);best={ref:{k:'d',id:d.id},p:q};epBlocked=null;}});return best;}
-const epBlockedMsg=()=>!epBlocked?'':epBlocked.E.a?'Strip light already has a wire on both ends':ELEC[epBlocked.E.type].label+' already has its '+EP_MAX[epBlocked.E.type]+' wires';
+const epBlockedMsg=()=>!epBlocked?'':epBlocked.E.a?'Strip light already has a wire on both ends':ELEC[epBlocked.E.type].label+' already has its '+EP_MAX[epBlocked.E.type]+' wires (lights take two at most)';
 function epPoint(p,from,skipWire,extra){const r=epSnapRef(p,skipWire,extra);if(r)return r;const sn=snapPoint(p,from);return {p:sn.p,sn};}
 
 // ---- tools
@@ -4375,7 +4383,7 @@ const AR_RE=[
   [/^Length includes the (\d+)% spare\. Fill compares the cables' cross-section with the inside of the conduit\.$/,m=>'الطول يشمل '+m[1]+'% احتياط. الامتلاء يقارن مقطع الكبلات بداخل الأنبوب.'],
   [/^([\s\S]*) · lengths in (\w+) include (\d+)% spare\.$/,m=>m[1]+' · الأطوال بـ '+m[2]+' وتشمل '+m[3]+'% احتياط.'],
   [/^(\w+) (\d+) × (\d+) pixels\.$/,m=>m[1]+' '+m[2]+' × '+m[3]+' بكسل.'],
-  [/^Spot light already has its (\d+) wires$/,m=>'إنارة السبوت لها '+m[1]+' أسلاك مسبقاً'],
+  [/^(.+) already has its (\d+) wires \(lights take two at most\)$/,m=>(arWord(m[1])||m[1])+' لها سلكان مسبقاً (الإنارة تأخذ سلكين كحد أقصى)'],
   [/^(\d+) wires?$/,m=>m[1]+' أسلاك'],
   [/^([A-Z][a-z]+(?: [a-z]+)?) (\d+)$/,m=>{const w=arWord(m[1]);return w?w+' '+m[2]:null;}],
   [/^(.+): (\d[\d,.]* (?:mm|cm|m|in|ft) × .+)$/,m=>{const w=arWord(m[1]);return w?w+': '+m[2]:null;}],
