@@ -207,6 +207,14 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .viewrow{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
 .titem.lockd{opacity:.4}
 #app:not(.emode) .eponly{display:none!important}
+#app:not(.pmode) .plonly{display:none!important}
+#app.pmode .homeonly,#app.pmode .tsec:not(.plonly),#app.pmode #elecBtn,#app.pmode #freeToggle,#app.pmode #pasteBtn,#app.pmode #refToggle,#app.pmode .planopts .seg,#app.pmode #laserBtn,#app.pmode #epShowBtn{display:none!important}
+.seg button.plbtn{color:#1864ab;font-weight:600}
+.seg button.plbtn[aria-pressed="true"]{background:#1971c2;border-color:#1971c2;color:#fff}
+.seg button.plbtn.lockd{opacity:.45;font-weight:500}
+#app.pmode .panelabel::after{content:" · Plumbing plan (home plan locked)";color:#1971c2}
+#app.pmode.plsch .panelabel::after{content:" · Plumbing schematic (blank sheet)"}
+ul.plissues{margin:8px 0 0;padding-left:18px;color:var(--danger);font-size:12px}
 #app.emode .homeonly,#app.emode .tsec:not(.eponly),#app.emode #elecBtn,#app.emode #freeToggle,#app.emode #pasteBtn,#app.emode #refToggle,#app.emode .planopts .seg,#app.emode #laserBtn{display:none!important}
 .seg button.epbtn{color:#b35c00;font-weight:600}
 .seg button.epbtn[aria-pressed="true"]{background:#e8590c;border-color:#e8590c;color:#fff}
@@ -228,6 +236,8 @@ html[dir="rtl"] .paneopts{right:auto;left:8px}
 html[dir="rtl"] .planopts{left:8px;right:150px}
 html[dir="rtl"] .kv select,html[dir="rtl"] .brk select{unicode-bidi:plaintext}
 html[lang^="ar"] #app.emode .panelabel::after{content:" · مخطط الكهرباء (مخطط البيت مقفل)"}
+html[lang^="ar"] #app.pmode .panelabel::after{content:" · مخطط التمديدات الصحية (مخطط البيت مقفل)"}
+html[lang^="ar"] #app.pmode.plsch .panelabel::after{content:" · المخطط التمثيلي للتمديدات (ورقة فارغة)"}
 html[dir="rtl"] .qt th,html[dir="rtl"] .qt td{text-align:left;padding:4px 6px 4px 0}
 html[dir="rtl"] .qt th:first-child,html[dir="rtl"] .qt td:first-child{text-align:right;padding-right:0;padding-left:8px}
 html[dir="rtl"] .qt td .swatch{margin:0 0 0 6px}

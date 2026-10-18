@@ -171,6 +171,19 @@ Works best with: a clear scan or PDF in which walls are visibly thicker than oth
 - When **Electrical** is off its tools are greyed out; turn it on to use them.
 - In 3D, plates and wall lights show on the walls, garden lights stand in the yard, and from inside (Walk) the spot lights, chandeliers and strips show on the ceiling. At **Night** these lights switch on in place of the default room light.
 
+### Plumbing plan
+
+- Press **Plumbing plan** above the plan. The home plan is locked and faded; the toilet, vanity, bathtub, shower, kitchen sink and dishwasher already on it show blue rings and can be connected directly.
+- Pipes: **Cold water** (blue), **Hot water** (red), **Hot water return** (dashed pink), **Drain / waste** (brown) and **Vent** (dashed green). Click to start, click to bend, and end on a fixture, equipment or another pipe of the same kind (that makes a tee). Drag the round + handles to bend a pipe.
+- Fixtures: WC, basin, kitchen sink, shower, bathtub, bidet, washing machine, dishwasher, faucet/mixer, outdoor tap, floor drain. Equipment: water meter, water tank, pump, pressure tank, water heater (electric, gas or solar), valves (ball, check, pressure reducing, thermostatic mixing), fittings (elbows, tees, couplings, unions, reducers, adapters, end caps), stack/riser, inspection chamber, cleanout, vent terminal/AAV and text notes.
+- **Standard**: Metric (EN 806 / DIN 1988-300 supply, EN 12056 drains; PPR/PEX and PVC) or US (IPC fixture units; copper/PEX and PVC). Switching resets the sizes.
+- **Supply**: city mains direct (checks mains pressure against what the fixtures need, and sizes a booster pump if it falls short), or mains filling a tank (sizes the lift pump to the roof tank and its riser, checks the gravity pressure at the worst fixture and suggests a booster if it is low).
+- Pipe sizes are worked out from what each pipe feeds (Auto), keeping water speed under the limit; drains are sized from discharge units and slope, vents from the drains they serve. Any size can be set by hand.
+- The water heater gets a suggested size (storage for the number of people, or kW for an instantaneous heater).
+- **Schematic**: a separate blank sheet for drawing the riser/schematic by hand with the same tools; it isn't calculated.
+- The **Plumbing** button shows the plumbing faded over the home plan. **Measures › Plumbing info** shows pipe names, sizes, slopes and lengths; each item can also show its own info.
+- The worksheet lists pipes by size and material (with the spare), fittings counted from the drawing, fixtures, valves and equipment, and saves as CSV.
+
 ### 3D: realistic look and walking inside
 
 - **Walk** (top right of the 3D view), **Walk inside** in a room's side panel, or double-click a floor in 3D puts you inside at eye level (1.6 m). Walk with `W` `A` `S` `D` or the arrow keys (`Q`/`E` or left/right arrows turn, `Shift` goes faster), drag to look around, scroll to step. On phones and tablets use the on-screen joystick and drag to look. Walls, fixtures and furniture stop you; door openings let you through. **Go to room** jumps to any room, and the plan shows where you stand and which way you look. `Esc` or **Orbit** goes back to the outside view.

@@ -19,7 +19,7 @@
     <span class="spacer"></span>
     <div class="viewrow"><button class="laserbtn" id="laserBtn" type="button" data-state="off" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 9a14.5 14.5 0 0 1 20 0"/><path d="M5.2 12.6a10 10 0 0 1 13.6 0"/><path d="M8.6 16.1a5 5 0 0 1 6.8 0"/><circle cx="12" cy="19.6" r="1.3" fill="currentColor" stroke="none"/></svg><span id="laserLbl">Laser</span></button>
     <div class="seg" role="group" aria-label="View">
-      <button id="vPlan" data-view="plan">Plan</button><button id="vEplan" type="button" class="epbtn" aria-pressed="false">Electric plan</button><button id="vSplit" data-view="split">Plan + 3D</button><button id="vElev" data-view="elev">Elevations</button><button id="v3d" data-view="3d">3D</button>
+      <button id="vPlan" data-view="plan">Plan</button><button id="vEplan" type="button" class="epbtn" aria-pressed="false">Electric plan</button><button id="vPplan" type="button" class="plbtn" aria-pressed="false">Plumbing plan</button><button id="vSplit" data-view="split">Plan + 3D</button><button id="vElev" data-view="elev">Elevations</button><button id="v3d" data-view="3d">3D</button>
     </div></div>
     <div class="menuwrap measwrap"><button class="btn togglebtn" id="measBtn" aria-haspopup="true" aria-expanded="false" aria-controls="measMenu" aria-pressed="true" title="Choose which measurements show on the plan">Measures ▾</button>
           <div class="menu measmenu" id="measMenu" hidden>
@@ -32,6 +32,8 @@
             <label><input type="checkbox" data-meas="rooms"> <span>Room areas and sizes</span></label>
             <label><input type="checkbox" data-meas="areas"> <span>Measured areas<small>off hides plain measurements completely; yard surfaces and room areas keep their colour</small></span></label>
             <label><input type="checkbox" data-meas="kept"> <span>Kept ruler dimensions</span></label>
+            <p class="mh" style="margin-top:8px">Plumbing plan</p>
+            <label><input type="checkbox" data-meas="plinfo"> <span>Plumbing info<small>pipe names, sizes, slopes and lengths; equipment details</small></span></label>
             <p class="mh" style="margin-top:8px">Electric plan</p>
             <label><input type="checkbox" data-meas="epinfo"> <span>Wire, conduit and part info<small>names, sizes, lengths and breakers. Off hides it all; a selected item can still show its own (in its panel)</small></span></label>
             <div class="rowbtns"><button class="btn" id="measAll">Show all</button><button class="btn" id="measNone">Hide all</button></div>
@@ -141,6 +143,44 @@
         <button class="titem tool" data-tool="eplan" data-kind="battery" title="Battery: click on a wall"><span class="ico" data-icon="ep_bat"></span><span class="tl">Battery</span></button>
       </div>
     </section>
+    <section class="tsec plonly" data-sec="plumb">
+      <button class="sechead" aria-expanded="true" aria-controls="libPlumb">Plumbing plan<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="toollist lib" id="libPlumb">
+        <button class="titem tool" data-tool="select" title="Pointer: select and edit pipes, fixtures and equipment (V)"><span class="ico" data-icon="select"></span><span class="tl">Pointer</span></button>
+        <p class="libsub">Pipes</p>
+        <button class="titem tool" data-tool="plumb" data-kind="cold" title="Cold water pipe (blue)"><span class="ico" data-icon="pl_cold"></span><span class="tl">Cold water</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="hot" title="Hot water pipe (red)"><span class="ico" data-icon="pl_hot"></span><span class="tl">Hot water</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="hotret" title="Hot water return pipe"><span class="ico" data-icon="pl_ret"></span><span class="tl">Hot return</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="drain" title="Drain, waste and soil pipe"><span class="ico" data-icon="pl_drain"></span><span class="tl">Drain / waste</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="vent" title="Vent pipe"><span class="ico" data-icon="pl_vent"></span><span class="tl">Vent</span></button>
+        <p class="libsub">Fixtures</p>
+        <button class="titem tool" data-tool="plumb" data-kind="wc" title="Toilet (WC)"><span class="ico" data-icon="pl_wc"></span><span class="tl">Toilet (WC)</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="basin" title="Wash basin"><span class="ico" data-icon="pl_basin"></span><span class="tl">Wash basin</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="sink" title="Kitchen sink"><span class="ico" data-icon="pl_sink"></span><span class="tl">Kitchen sink</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="shower" title="Shower"><span class="ico" data-icon="pl_shower"></span><span class="tl">Shower</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="bath" title="Bathtub"><span class="ico" data-icon="pl_bath"></span><span class="tl">Bathtub</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="bidet" title="Bidet"><span class="ico" data-icon="pl_bidet"></span><span class="tl">Bidet</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="washer" title="Washing machine"><span class="ico" data-icon="pl_washer"></span><span class="tl">Washing machine</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="dw" title="Dishwasher"><span class="ico" data-icon="pl_dw"></span><span class="tl">Dishwasher</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="faucet" title="Faucet / mixer"><span class="ico" data-icon="pl_faucet"></span><span class="tl">Faucet / mixer</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="tap" title="Outdoor / garden tap"><span class="ico" data-icon="pl_tap"></span><span class="tl">Outdoor tap</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="fdrain" title="Floor drain"><span class="ico" data-icon="pl_fdrain"></span><span class="tl">Floor drain</span></button>
+        <p class="libsub">Equipment</p>
+        <button class="titem tool" data-tool="plumb" data-kind="meter" title="Water meter / mains connection"><span class="ico" data-icon="pl_meter"></span><span class="tl">Water meter</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="tank" title="Water tank (roof or ground)"><span class="ico" data-icon="pl_tank"></span><span class="tl">Water tank</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="pump" title="Pump"><span class="ico" data-icon="pl_pump"></span><span class="tl">Pump</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="ptank" title="Pressure tank"><span class="ico" data-icon="pl_ptank"></span><span class="tl">Pressure tank</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="heater" title="Water heater"><span class="ico" data-icon="pl_heater"></span><span class="tl">Water heater</span></button>
+        <p class="libsub">Valves, fittings and drainage</p>
+        <button class="titem tool" data-tool="plumb" data-kind="valve" title="Valve"><span class="ico" data-icon="pl_valve"></span><span class="tl">Valve</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="fitting" title="Fitting: elbow, tee, coupling, union, reducer…"><span class="ico" data-icon="pl_fitting"></span><span class="tl">Fitting</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="stack" title="Stack or riser"><span class="ico" data-icon="pl_stack"></span><span class="tl">Stack / riser</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="manhole" title="Inspection chamber / sewer connection"><span class="ico" data-icon="pl_manhole"></span><span class="tl">Inspection chamber</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="cleanout" title="Cleanout"><span class="ico" data-icon="pl_cleanout"></span><span class="tl">Cleanout</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="ventcap" title="Vent terminal or air admittance valve"><span class="ico" data-icon="pl_ventcap"></span><span class="tl">Vent terminal</span></button>
+        <button class="titem tool" data-tool="plumb" data-kind="note" title="A text note (for the schematic)"><span class="ico" data-icon="pl_note"></span><span class="tl">Note</span></button>
+      </div>
+    </section>
   </nav>
 
   <nav class="tabbar" id="tabbar" role="tablist" aria-label="Open projects"></nav>
@@ -150,6 +190,7 @@
       <span class="panelabel">Plan · Level 1</span>
       <div class="paneopts planopts">
         <button class="btn" id="pasteBtn" title="Paste the copied items (Ctrl+V)" hidden>Paste</button>
+        <button class="btn togglebtn" id="plShowBtn" aria-pressed="true" title="Show the plumbing plan faded over the home plan, or hide it" hidden>Plumbing</button>
         <button class="btn togglebtn" id="epShowBtn" aria-pressed="true" title="Show the electric plan faded over the home plan, or hide it" hidden>Wiring</button>
         <button class="btn togglebtn" id="elecBtn" aria-pressed="true" title="Show or hide the electrical layer: lights, switches and sockets">Electrical</button>
         <button class="btn togglebtn" id="refToggle" aria-pressed="true" title="Show or hide the imported reference drawing" hidden>Reference</button>
@@ -186,6 +227,7 @@
     <div class="sheethead"><button type="button" class="sheetgrip" id="sheetGrip" aria-label="Close details"><span></span></button><button type="button" class="btn sheetx" id="sheetClose">Close</button></div>
     <section class="sec" id="inspector" aria-live="polite"></section>
     <section class="sec eponly" id="epSheet"></section>
+    <section class="sec plonly" id="plSide"></section>
     <section class="sec homeonly">
       <p class="h">Takeoff</p>
       <table class="qt" id="qtable"></table>
