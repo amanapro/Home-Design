@@ -411,3 +411,15 @@ label.epinfo{display:flex;gap:7px;align-items:flex-start;font-size:12.5px;margin
 .ctxmenu .ctxsub button[aria-checked="true"]{font-weight:600;color:var(--accent)}
 .ctxmenu .ctxsub button[aria-checked="true"]::after{content:'✓'}
 @media (pointer:coarse){.ctxmenu button{padding:10px 12px;font-size:14px}}
+.stats{max-height:64vh;overflow:auto;padding-inline-end:4px}
+.stats section{margin-bottom:14px}
+.stats .h{margin:4px 0 8px}
+.stgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-bottom:8px}
+.stbig{border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;background:var(--paper)}
+.stbig span{font-size:11.5px;color:var(--muted)}
+.stbig b{font-family:var(--f-mono);font-size:17px;font-weight:500;unicode-bidi:plaintext}
+.stbig small{font-size:11px;color:var(--muted)}
+.sttab{width:100%;border-collapse:collapse;font-size:12.5px}
+.sttab th{text-align:start;font-weight:500;color:var(--muted);font-size:11px;border-bottom:1px solid var(--line);padding:3px 6px}
+.sttab td{padding:4px 6px;border-bottom:1px solid var(--line-soft)}
+.sttab td:not(:first-child){font-family:var(--f-mono);unicode-bidi:plaintext}
