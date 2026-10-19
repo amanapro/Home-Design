@@ -2417,8 +2417,8 @@ async function openRecent(r){if(!r)return;let text=null;try{text=await TAURI.fs.
 // "Kitchen plan.bench.json" -> "Kitchen plan" (null when the path has no readable file name, e.g. an Android content id)
 function fileProjName(p){const b=baseName(p||'');if(!/\.json$/i.test(b))return null;const n=b.replace(/\.bench\.json$/i,'').replace(/\.json$/i,'').trim();return n||null;}
 // the last project worked on, offered as "Continue" the next time the app starts
-function recordLast(t){if(!t||tabIsBlank(t))return;if(t===activeTab)storeActive();const rec={name:t.M.name||'Untitled project',filePath:t.filePath||null,savedAt:t.lastSaved||Date.now(),data:JSON.parse(tabJSON(t))};
-  try{localStorage.setItem('bm-last',JSON.stringify(rec));}catch(e){try{delete rec.data.refImage;localStorage.setItem('bm-last',JSON.stringify(rec));}catch(_){}}}
+function recordLast(t){if(!t||tabIsBlank(t))return;if(t===activeTab)storeActive();const rec={name:t.M.name||'Untitled project',filePath:t.filePath||null,savedAt:t.lastSaved||Date.now(),data:JSON.parse(tabJSON(t)),big:!!(t.ref||t.img)};
+  delete rec.data.reference;delete rec.data.refImage;try{localStorage.setItem('bm-last',JSON.stringify(rec));}catch(e){}bigSave('last',t.ref,t.img);}
 function lastRecord(){try{const r=JSON.parse(localStorage.getItem('bm-last')||'null');return r&&r.data&&r.data.model&&Array.isArray(r.data.model.walls)?r:null;}catch(e){return null;}}
 async function saveProject(as){
   try{const text=projectJSON();
@@ -2811,6 +2811,13 @@ function build3dElec(g,box,S,inside){if(!M.elec||!M.elec.length)return [];const 
 let tabs=[],activeTab=null,tabSeq=1;
 const AUTOSAVE_MS=5*60*1000;
 let autosaveOn=true;try{autosaveOn=localStorage.getItem('bm-autosave')!=='0';}catch(e){}
+// Reference drawings and plan images can be several MB, more than localStorage holds, so between sessions they are
+// kept in IndexedDB; the project itself stays in localStorage. Each tab (and the "Continue" project) has one entry.
+const BIG=(()=>{let dbp=null;const db=()=>dbp||(dbp=new Promise((res,rej)=>{try{const r=indexedDB.open('benchmark-planner',1);r.onupgradeneeded=()=>r.result.createObjectStore('big');
+    r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);}catch(e){rej(e);}}));
+  const tx=(mode,fn)=>db().then(d=>new Promise((res,rej)=>{const t=d.transaction('big',mode),st=t.objectStore('big');const q=fn(st);t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error);}));
+  return {get:k=>tx('readonly',st=>st.get(k)).catch(()=>null),put:(k,v)=>tx('readwrite',st=>st.put(v,k)).catch(()=>null),del:k=>tx('readwrite',st=>st.delete(k)).catch(()=>null)};})();
+function bigSave(key,ref,img){return (ref||img)?BIG.put(key,{ref:ref||null,img:img||null}):BIG.del(key);}
 function tabJSON(t){return JSON.stringify({app:'benchmark-planner',version:1,units:t.units,model:t.M,reference:t.ref||undefined,refImage:t.img||undefined});}
 function makeTab(model,o={}){return Object.assign({id:'t'+(tabSeq++),M:model||blankModel(),undo:[],redo:[],ref:null,img:null,filePath:null,units:units,view:null,elevPt:null,savedSnap:null,lastSaved:0,lastAuto:0},o);}
 function storeActive(){const t=activeTab;if(!t)return;Object.assign(t,{M,undo:undoStack,redo:redoStack,ref:refDrawing,img:refImage,filePath,units,view:{...view},elevPt});}
@@ -2846,13 +2853,14 @@ function updateAutosaveNote(){const n=$('#autosv');if(!n)return;const t=activeTa
 let tabSaveTimer=0;
 function saveTabsNow(){clearTimeout(tabSaveTimer);if(!activeTab||bootPending)return;storeActive();
   try{localStorage.setItem('bm-tabs',JSON.stringify({active:activeTab.id,ids:tabs.map(t=>t.id),seq:tabSeq,snap:snapOn,free:freeMove}));}catch(e){}
-  tabs.forEach(t=>{if(t!==activeTab&&t.stored)return;const meta={filePath:t.filePath,dirty:tabDirty(t),lastSaved:t.lastSaved};
-    try{localStorage.setItem('bm-tab-'+t.id,JSON.stringify(Object.assign(JSON.parse(tabJSON(t)),meta)));t.stored=true;}
-    catch(e){try{const o=JSON.parse(tabJSON(t));delete o.refImage;localStorage.setItem('bm-tab-'+t.id,JSON.stringify(Object.assign(o,meta)));t.stored=true;}catch(_){}}});}
+  tabs.forEach(t=>{if(t!==activeTab&&t.stored&&t.bigRef===t.ref&&t.bigImg===t.img)return;const meta={filePath:t.filePath,dirty:tabDirty(t),lastSaved:t.lastSaved,big:!!(t.ref||t.img)};
+    try{const o=JSON.parse(tabJSON(t));delete o.reference;delete o.refImage;localStorage.setItem('bm-tab-'+t.id,JSON.stringify(Object.assign(o,meta)));t.stored=true;}catch(e){}
+    if(t.bigRef!==t.ref||t.bigImg!==t.img){t.bigRef=t.ref;t.bigImg=t.img;bigSave('tab-'+t.id,t.ref,t.img);}});}
 function save(){if(activeTab)activeTab.stored=false;clearTimeout(tabSaveTimer);tabSaveTimer=setTimeout(saveTabsNow,700);renderTabs();}
 function loadTabs(){try{const ix=JSON.parse(localStorage.getItem('bm-tabs')||'null');if(!ix||!ix.ids||!ix.ids.length)return false;tabSeq=ix.seq||tabSeq;if(ix.snap!=null)snapOn=!!ix.snap;if(ix.free!=null)freeMove=!!ix.free;
     ix.ids.forEach(id=>{try{const o=JSON.parse(localStorage.getItem('bm-tab-'+id)||'null');if(!o||!o.model)return;
-      const t=makeTab(Object.assign(blankModel(),o.model),{id,units:normUnits(o.units),ref:o.reference||null,img:o.refImage||null,filePath:o.filePath||null,lastSaved:o.lastSaved||0,stored:true});
+      const t=makeTab(Object.assign(blankModel(),o.model),{id,units:normUnits(o.units),ref:o.reference||null,img:o.refImage||null,filePath:o.filePath||null,lastSaved:o.lastSaved||0,stored:true,big:!!o.big});
+      if(o.big){t.bigRef=t.ref;t.bigImg=t.img;}
       t.savedSnap=o.dirty?null:JSON.stringify(t.M);tabs.push(t);}catch(e){}});
     if(!tabs.length)return false;activeTab=tabs.find(t=>t.id===ix.active)||tabs[0];return true;}catch(e){return false;}}
 // older versions kept one drawing; bring it in as the first tab
@@ -5104,18 +5112,22 @@ function startWith(example){const t=activeTab;if(example){t.M=sampleModel();t.un
 // the answer to the start question: bring back the last session's tabs, or let them go
 function finishBoot(recover){if(!bootPending)return;bootPending=false;
   if(recover&&prevTabs.length){tabs.length=0;prevTabs.forEach(t=>{t.stored=false;tabs.push(t);});activate(tabs.find(t=>t.wasActive)||tabs[0],true);}
-  try{prevIds.forEach(id=>{if(!tabs.some(t=>t.id===id))localStorage.removeItem('bm-tab-'+id);});}catch(e){}
+  try{prevIds.forEach(id=>{if(!tabs.some(t=>t.id===id)){localStorage.removeItem('bm-tab-'+id);BIG.del('tab-'+id);}});}catch(e){}
   prevTabs=[];saveTabsNow();renderTabs();}
 async function continueLast(){const L=lastRecord();if(!L)return;let o=null;
   if(NATIVE&&L.filePath){try{const x=JSON.parse(await TAURI.fs.readTextFile(L.filePath));if(x&&x.model&&Array.isArray(x.model.walls)&&Array.isArray(x.model.items))o=x;}catch(e){}}
-  if(!o)o=L.data;const m=Object.assign(blankModel(),o.model);if(!o.model.name||o.model.name==='Untitled project')m.name=L.name||m.name;
+  if(!o)o=L.data;
+  // the reference drawing and plan image: from the file when it has them, otherwise as they were kept on this device
+  if(!o.reference||!o.refImage){const b=await BIG.get('last');if(b){o=Object.assign({},o);if(!o.reference&&b.ref)o.reference=b.ref;if(!o.refImage&&b.img)o.refImage=b.img;}}
+  const m=Object.assign(blankModel(),o.model);if(!o.model.name||o.model.name==='Untitled project')m.name=L.name||m.name;
   const t=makeTab(m,{units:normUnits(o.units||units),ref:o.reference||null,img:o.refImage||null,filePath:NATIVE?(L.filePath||null):null,lastSaved:L.savedAt||Date.now()});
   t.savedSnap=JSON.stringify(t.M);const old=activeTab;if(old&&tabIsBlank(old)&&!tabDirty(old)){tabs.splice(tabs.indexOf(old),1,t);try{localStorage.removeItem('bm-tab-'+old.id);}catch(e){}}else tabs.push(t);
   activate(t,true);saveTabsNow();toast('Continuing “'+m.name+'”'+(L.filePath?' ('+baseName(L.filePath)+')':''));}
 function whenText(ms){if(!ms)return '';const d=new Date(ms),now=new Date();const tm=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
   if(d.toDateString()===now.toDateString())return 'today, '+tm;const y=new Date(now);y.setDate(now.getDate()-1);if(d.toDateString()===y.toDateString())return 'yesterday, '+tm;
   return d.toLocaleDateString([],{day:'numeric',month:'short',year:d.getFullYear()===now.getFullYear()?undefined:'numeric'})+', '+tm;}
-async function welcomeDialog(){const L=lastRecord();const rec=prevTabs.filter(t=>t.savedSnap!==JSON.stringify(t.M));
+async function welcomeDialog(){try{await Promise.all(prevTabs.filter(t=>t.big&&!t.ref&&!t.img).map(t=>BIG.get('tab-'+t.id).then(b=>{if(b){t.ref=b.ref;t.img=b.img;t.bigRef=t.ref;t.bigImg=t.img;}})));}catch(e){}
+  const L=lastRecord();const rec=prevTabs.filter(t=>t.savedSnap!==JSON.stringify(t.M));
   const body=document.createElement('div');body.className='welcome';
   const lang=document.createElement('div');lang.className='wlang';lang.setAttribute('translate','no');lang.innerHTML='<button type="button" data-lang="en" aria-pressed="'+(LANG==='en')+'">English</button><button type="button" data-lang="ar" aria-pressed="'+(LANG==='ar')+'">العربية</button>';
   const card=(id,svg,title,sub)=>`<button type="button" class="wcard" id="${id}"><span class="wimg"><svg viewBox="0 0 64 48" aria-hidden="true">${svg}</svg></span><span class="wtx"><b>${title}</b><span>${sub}</span></span></button>`;
@@ -5145,14 +5157,14 @@ async function welcomeDialog(){const L=lastRecord();const rec=prevTabs.filter(t=
 const PREFS=(()=>{try{return JSON.parse(localStorage.getItem('bm-prefs'))||{};}catch(e){return {};}})();let prefsLast='';
 function prefsNow(){const v=$('#stage').dataset.view;return {snap:snapOn,free:freeMove,drag:emptyDrag,cut:cutaway,
   view:eMode?epPrevView:pMode?plPrevView:v,mode:eMode?'ep':pMode?'pl':'home',sheet:pMode?plSheet:'plan',door:doorType,
-  wall:{t:defaults.t,h:defaults.h},swing:swingDefaults,slide:slideDefaults,col:colDefaults,firepit:firepitDefaults,text:textDefaults};}
+  refShow:refVisible,wall:{t:defaults.t,h:defaults.h},swing:swingDefaults,slide:slideDefaults,col:colDefaults,firepit:firepitDefaults,text:textDefaults};}
 function prefsSave(){if(bootPending)return;try{const j=JSON.stringify(prefsNow());if(j!==prefsLast){prefsLast=j;localStorage.setItem('bm-prefs',j);}}catch(e){}}
 (function prefsLoad(){const P=PREFS,ok=v=>v&&typeof v==='object';
   if(typeof P.snap==='boolean')snapOn=P.snap;if(typeof P.free==='boolean')freeMove=P.free;if(P.drag==='box'||P.drag==='pan')emptyDrag=P.drag;
   if(P.wall){if(P.wall.t>=10)defaults.t=P.wall.t;if(P.wall.h>=100)defaults.h=P.wall.h;}
   [[swingDefaults,P.swing],[slideDefaults,P.slide],[colDefaults,P.col],[firepitDefaults,P.firepit],[textDefaults,P.text]].forEach(([d,v])=>{if(ok(v))for(const k in d)if(v[k]!=null&&typeof v[k]===typeof d[k])d[k]=v[k];});
   if(typeof P.door==='string'&&P.door)doorType=P.door;})();
-function prefsRestoreMode(){const P=PREFS;try{if(P.mode==='ep'&&epAllowed())epEnter();else if(P.mode==='pl'&&plAllowed()){plEnter();if(P.sheet==='sch')plSetSheet('sch');}}catch(e){}prefsSave();}
+function prefsRestoreMode(){const P=PREFS;try{if(P.refShow===false&&(refDrawing||refImage)){refVisible=false;updateRefUI();dirty();}}catch(e){}try{if(P.mode==='ep'&&epAllowed())epEnter();else if(P.mode==='pl'&&plAllowed()){plEnter();if(P.sheet==='sch')plSetSheet('sch');}}catch(e){}prefsSave();}
 setInterval(prefsSave,3000);addEventListener('pagehide',prefsSave);document.addEventListener('visibilitychange',()=>{if(document.hidden)prefsSave();});
 
 /* boot */
